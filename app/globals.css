@@ -135,3 +135,36 @@
     --sidebar-ring: oklch(0.439 0 0);
   }
 }
+
+/* In your globals.css or tailwind.config.ts */
+[data-state="collapsed"] .sidebar-content {
+  @apply hidden;
+}
+
+[data-state="expanded"] .sidebar-content {
+  @apply block;
+}
+
+[data-state="collapsed"] .sidebar-rail {
+  @apply flex w-[60px]; /* icon-only rail */
+}
+
+[data-state="expanded"] .sidebar-rail {
+  @apply hidden;
+}
+
+.sidebar-custom-width {
+  --sidebar-width: 360px;
+}
+
+.bg-custom-sidebar {
+  background-color: #2d2d2d !important; /* Example: dark slate blue, adjust as desired */
+}
+
+/* body {
+  font-family: 'Clash Display', 'Clash Display Placeholder', sans-serif;
+} */
+
+.font-clash {
+  font-family: 'Clash Display', 'Clash Display Placeholder', sans-serif;
+}

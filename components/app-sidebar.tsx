@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import {
   Sidebar,
   SidebarContent,
@@ -10,6 +9,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   User,
@@ -49,33 +49,55 @@ const navigationItems = [
   },
 ];
 
+function CustomSidebarTrigger() {
+  const { toggleSidebar } = useSidebar()
+
+  return (
+    <button
+      onClick={toggleSidebar}
+      className="flex items-center justify-center h-10 w-10 rounded-lg text-slate-900 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+    >
+      <Menu className="h-6 w-6" />
+    </button>
+  )
+}
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
-    <Sidebar {...props} className="border-r border-slate-800">
-      <SidebarHeader className="p-4">
-        <div className="flex items-center justify-center">
-          <Menu className="w-6 h-6 text-slate-400" />
+    <Sidebar {...props} collapsible="icon" className="border-r border-slate-800 bg-custom-sidebar">
+      <SidebarHeader className="p-5">
+
+        <div className="flex items-center justify-left group-data-[collapsible=icon]:justify-left">
+          <CustomSidebarTrigger />
         </div>
+        {/* <CustomSidebarTrigger /> */}
       </SidebarHeader>
-      <SidebarContent className="px-2">
-        <SidebarMenu className="space-y-2">
+      <SidebarContent className="px-6">
+        <SidebarMenu className="space-y-4">
           {navigationItems.map((item) => (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton
                 asChild
                 isActive={item.isActive}
-                className="w-12 h-12 rounded-xl justify-center data-[active=true]:bg-gradient-to-r data-[active=true]:from-purple-500 data-[active=true]:to-pink-500 hover:bg-slate-800"
                 tooltip={item.title}
+                className="w-full h-12 rounded-lg justify-start group-data-[collapsible=icon]:justify-center data-[active=true]:bg-gradient-to-r data-[active=true]:from-purple-500 data-[active=true]:to-pink-500 hover:bg-slate-800"
               >
-                <a href={item.url}>
-                  <item.icon className="w-5 h-5" />
+                <a
+                  href={item.url}
+                  className="flex items-center gap-3"
+                  onClick={(e) => {
+                    // Prevent sidebar expansion when clicking menu items
+                    e.stopPropagation()
+                  }}
+                >
+                  <item.icon className="w-6 h-6 shrink-0" />
+                  <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
       </SidebarContent>
-      <SidebarRail />
     </Sidebar>
   );
 }
