@@ -19,6 +19,34 @@ const pinata = new PinataSDK({
   pinataGateway: "example-gateway.mypinata.cloud",
 });
 
+async function readScoreServer(user: `0x${string}`) {
+  const r = await fetch("/api/score-read", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ user }),
+  });
+  const json = await r.json();
+  if (!r.ok) throw new Error(json.error || "read failed");
+  return json as {
+    user: `0x${string}`;
+    score: number;
+    factors: Record<string, string>; // 1e18-scaled strings
+    lastUpdated: number;             // unix seconds
+  };
+}
+
+async function refreshScore(user: `0x${string}`) {
+  const r = await fetch("/api/score-refresh", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ user }),
+  });
+  const json = await r.json();
+  if (!r.ok) throw new Error(json.error || "refresh failed");
+  return json.txHash as string;
+}
+
+
 export default function DashboardPage() {
   const { address, isConnected } = useAccount();
   const router = useRouter();
