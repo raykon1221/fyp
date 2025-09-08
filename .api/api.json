@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "apis": [
+    {
+      "identifier": "poap",
+      "source": "@poap/v1.0#rjo7344meiu2o9h",
+      "integrity": "sha512-BhJOER1uzbI/zoh5EQIZrw4EFLvDtMk8qz8deaw+bIVAvMRrliE1pclI3xcm/l+8xYxoqacxziyf34lwcNZQCQ==",
+      "installerVersion": "6.1.3"
+    }
+  ]
+}

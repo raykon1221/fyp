@@ -22,30 +22,30 @@ import {
 
 const navigationItems = [
   {
-    title: "Profile",
+    title: "Dashboard",
     icon: User,
-    url: "#",
+    url: "/dashboard",
     isActive: true,
   },
   {
-    title: "Organization",
+    title: "On-chain Activity",
     icon: Building2,
-    url: "#",
+    url: "/onchain",
   },
   {
-    title: "Refresh",
+    title: "Your NFTs",
     icon: RotateCcw,
-    url: "#",
+    url: "/nfts",
   },
   {
-    title: "Favorites",
+    title: "Your POAPs",
     icon: Star,
-    url: "#",
+    url: "/poaps",
   },
   {
-    title: "Analytics",
+    title: "Your NFTs",
     icon: BarChart3,
-    url: "#",
+    url: "/nfts",
   },
 ];
 
