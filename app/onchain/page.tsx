@@ -6,34 +6,56 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
+
+// import your fetchers
+import {
+  fetchRepaysByAccount,
+  fetchBorrowsByAccount,
+  fetchSuppliesByAccount,
+  RepayRow,
+  BorrowRow,
+  SupplyRow,
+} from "@/lib/subgraph";
 
 export default function OnchainActivityPage() {
   const [address, setAddress] = useState("");
-  const [queryType, setQueryType] = useState("repay");
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [queryType, setQueryType] = useState<"repay" | "borrow" | "supply">(
+    "repay"
+  );
+  const [transactions, setTransactions] = useState<
+    (RepayRow | BorrowRow | SupplyRow)[]
+  >([]);
 
-  // Mock fetch – replace with your GraphQL fetch
   const fetchTransactions = async () => {
     if (!address) return;
-    // Here you would call your GraphQL API
-    // For now we’ll just simulate with mock data
-    const mock = [
-      {
-        id: "1",
-        txHash: "0x123...abc",
-        amount: "100 DAI",
-        timestamp: "2025-09-04 14:00",
-      },
-      {
-        id: "2",
-        txHash: "0x456...def",
-        amount: "50 DAI",
-        timestamp: "2025-09-04 15:30",
-      },
-    ];
-    setTransactions(mock);
+
+    try {
+      let data: any[] = [];
+
+      if (queryType === "repay") {
+        data = await fetchRepaysByAccount(address as `0x${string}`);
+      } else if (queryType === "borrow") {
+        data = await fetchBorrowsByAccount(address as `0x${string}`);
+      } else if (queryType === "supply") {
+        data = await fetchSuppliesByAccount(address as `0x${string}`);
+      }
+
+      setTransactions(data);
+    } catch (err) {
+      console.error("Error fetching transactions:", err);
+      setTransactions([]);
+    }
   };
+
+  const explorer =
+    process.env.NEXT_PUBLIC_EXPLORER_BASE || "https://etherscan.io";
 
   return (
     <div className="flex min-h-screen bg-slate-950 text-white">
@@ -54,7 +76,9 @@ export default function OnchainActivityPage() {
               {/* Controls */}
               <Card className="bg-slate-900 border-slate-800">
                 <CardContent className="p-6 space-y-4">
-                  <h2 className="text-white text-xl font-bold">Search Transactions</h2>
+                  <h2 className="text-white text-xl font-bold">
+                    Search Transactions
+                  </h2>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Input
@@ -64,7 +88,12 @@ export default function OnchainActivityPage() {
                       className="text-white bg-slate-800 border-slate-700"
                     />
 
-                    <Select onValueChange={(val) => setQueryType(val)} defaultValue="repay">
+                    <Select
+                      onValueChange={(val) =>
+                        setQueryType(val as "repay" | "borrow" | "supply")
+                      }
+                      defaultValue="repay"
+                    >
                       <SelectTrigger className="text-white bg-slate-800 border-slate-700">
                         <SelectValue placeholder="Select Query Type" />
                       </SelectTrigger>
@@ -88,25 +117,69 @@ export default function OnchainActivityPage() {
               {/* Table */}
               <Card className="bg-slate-900 border-slate-800">
                 <CardContent className="p-6">
-                  <h2 className="text-white text-xl font-bold mb-4">Transaction Data</h2>
+                  <h2 className="text-white text-xl font-bold mb-4">
+                    Transaction Data
+                  </h2>
                   {transactions.length === 0 ? (
-                    <div className="text-slate-500 text-sm">No data yet. Enter a wallet and fetch.</div>
+                    <div className="text-slate-500 text-sm">
+                      No data yet. Enter a wallet and fetch.
+                    </div>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="min-w-full border border-slate-800 text-sm">
                         <thead className="bg-slate-800">
                           <tr>
-                            <th className="text-white px-4 py-2 text-left">Tx Hash</th>
-                            <th className="text-white px-4 py-2 text-left">Amount</th>
-                            <th className="text-white px-4 py-2 text-left">Timestamp</th>
+                            <th className="text-white px-4 py-2 text-left">
+                              Tx Hash
+                            </th>
+                            <th className="text-white px-4 py-2 text-left">
+                              Amount
+                            </th>
+                            <th className="text-white px-4 py-2 text-left">
+                              Timestamp
+                            </th>
+                            {queryType === "repay" && (
+                              <th className="text-white px-4 py-2 text-left">
+                                useATokens
+                              </th>
+                            )}
+                            {queryType === "borrow" && (
+                              <th className="text-white px-4 py-2 text-left">
+                                Borrow Rate
+                              </th>
+                            )}
                           </tr>
                         </thead>
                         <tbody>
-                          {transactions.map((tx) => (
-                            <tr key={tx.id} className="border-t border-slate-800 hover:bg-slate-800">
-                              <td className="text-white px-4 py-2 font-mono">{tx.txHash}</td>
-                              <td className="text-white px-4 py-2">{tx.amount}</td>
-                              <td className="text-white px-4 py-2">{tx.timestamp}</td>
+                          {transactions.map((tx: any) => (
+                            <tr
+                              key={tx.id}
+                              className="border-t border-slate-800 hover:bg-slate-800"
+                            >
+                              <td className="text-white px-4 py-2 font-mono">
+                                <a
+                                className="text-blue-600 underline"
+                                href={`${explorer}/tx/${tx.txHash}`}
+                                target="_blank"
+                                rel="noreferrer"
+                              >{tx.txHash}</a>
+                              </td>
+                              <td className="text-white px-4 py-2">
+                                {tx.amount}
+                              </td>
+                              <td className="text-white px-4 py-2">
+                                {tx.timestamp}
+                              </td>
+                              {queryType === "repay" && (
+                                <td className="text-white px-4 py-2">
+                                  {tx.useATokens ? "Yes" : "No"}
+                                </td>
+                              )}
+                              {queryType === "borrow" && (
+                                <td className="text-white px-4 py-2">
+                                  {tx.borrowRate}
+                                </td>
+                              )}
                             </tr>
                           ))}
                         </tbody>
