@@ -1,160 +1,173 @@
-import { postAaveSubgraph } from "@/lib/subgraphClient";
+// server/factors/aave.ts
+import { postAaveSubgraph } from "@lib/subgraphClient";
 
-/** Collateral diversity (0..1), capped at 5 unique collateral reserves */
+const lower = (s: string) => s.toLowerCase();
+
+/** 20% — Collateral diversity (0..1): number of distinct reserves used as collateral, capped at 5. */
 export async function getCollateralDiversity01(user: `0x${string}`): Promise<number> {
-  const lower = user.toLowerCase();
-
-  // primary
-  const q1 = `
-    query CollateralDiversity($user: ID!) {
-      userReserves(where: { user: $user, usageAsCollateralEnabledOnUser: true }) {
-        reserve { id symbol }
+  const q = `
+    query($u:String!){
+      userReserves(where:{ user:$u }){
+        usageAsCollateralEnabledOnUser
         scaledATokenBalance
+        reserve { id }
       }
     }`;
-
-  // fallback via users(...) { userReserves { ... } }
-  const q2 = `
-    query CollateralDiversityViaUsers($user: ID!) {
-      users(where: { id: $user }) {
-        id
-        userReserves(where: { usageAsCollateralEnabledOnUser: true }) {
-          reserve { id symbol }
-          scaledATokenBalance
-        }
-      }
-    }`;
-
-  let data: any;
-  try {
-    data = await postAaveSubgraph<any>(q1, { user: lower });
-  } catch (e: any) {
-    // if schema says no field userReserves at root
-    if (String(e.message).includes("no field") || String(e.message).includes("Cannot query field")) {
-      data = await postAaveSubgraph<any>(q2, { user: lower });
-    } else {
-      throw e;
-    }
-  }
-
-  const reserves =
-    data?.userReserves ??
-    (Array.isArray(data?.users) ? data.users[0]?.userReserves ?? [] : []);
-
-  const active = reserves.filter((r: any) => Number(r.scaledATokenBalance) > 0);
-  const uniq = new Set(active.map((r: any) => r.reserve.id)).size;
-
+  const d: any = await postAaveSubgraph(q, { u: lower(user) });
+  const rows = Array.isArray(d?.userReserves) ? d.userReserves : [];
+  const active = rows.filter(
+    (r: any) => r?.usageAsCollateralEnabledOnUser && Number(r?.scaledATokenBalance ?? 0) > 0
+  );
+  const uniq = new Set(active.map((r: any) => r?.reserve?.id)).size;
   return Math.min(uniq / 5, 1);
 }
 
-/** Wallet activity last 90d (0..1): counts supplies/redeemUnderlyings/borrows/repays/liquidationCalls */
+/** 10% — Wallet activity (0..1): activity in the last 90d using userTransactions if available, else bucketed entities. */
 export async function getWalletActivity01(user: `0x${string}`): Promise<number> {
-  const since = Math.floor(Date.now() / 1000) - 90 * 86400;
-  const q = `
-    query Activity90d($u: String!, $s: Int!) {
-      supplies           (where:{ user:$u, timestamp_gte:$s }) { id }
-      redeemUnderlyings  (where:{ user:$u, timestamp_gte:$s }) { id }
-      borrows            (where:{ user:$u, timestamp_gte:$s }) { id }
-      repays             (where:{ user:$u, timestamp_gte:$s }) { id }
-      liquidationCalls   (where:{ user:$u, timestamp_gte:$s }) { id }
+  const since = Math.floor(Date.now()/1000) - 90*86400;
+
+  // Preferred: userTransactions
+  const qTx = `
+    query($u:String!,$s:Int!){
+      userTransactions(where:{ user:$u, timestamp_gte:$s }, first: 1000){ id }
     }`;
-  const d = await postAaveSubgraph<any>(q, { u: user.toLowerCase(), s: since });
-
-  const total =
-    (d?.supplies?.length || 0) +
-    (d?.redeemUnderlyings?.length || 0) +
-    (d?.borrows?.length || 0) +
-    (d?.repays?.length || 0) +
-    (d?.liquidationCalls?.length || 0);
-
-  return Math.min(total / 60, 1);
+  try {
+    const d: any = await postAaveSubgraph(qTx, { u: lower(user), s: since });
+    const n = Array.isArray(d?.userTransactions) ? d.userTransactions.length : 0;
+    return Math.min(n / 60, 1);
+  } catch {
+    // Fallback: count across known event types the schema exposes
+    const qBuckets = `
+      query($u:String!,$s:Int!){
+        borrows(where:{ user:$u, timestamp_gte:$s }){ id }
+        repays(where:{ user:$u, timestamp_gte:$s }){ id }
+        repays2: repays(where:{ account:$u, timestamp_gte:$s }){ id }
+        supply(where:{ user:$u, timestamp_gte:$s }){ id }
+        redeemUnderlyings(where:{ user:$u, timestamp_gte:$s }){ id }
+        liquidationCalls(where:{ user:$u, timestamp_gte:$s }){ id }
+        flashLoans(where:{ user:$u, timestamp_gte:$s }){ id }
+      }`;
+    const b: any = await postAaveSubgraph(qBuckets, { u: lower(user), s: since });
+    const total =
+      (b?.borrows?.length || 0) +
+      (b?.repays?.length || 0) +
+      (b?.repays2?.length || 0) +
+      (b?.supply?.length || 0) +
+      (b?.redeemUnderlyings?.length || 0) +
+      (b?.liquidationCalls?.length || 0) +
+      (b?.flashLoans?.length || 0);
+    return Math.min(total / 60, 1);
+  }
 }
 
-/** Risk “safety” proxy (0..1): map CR 1x→0 to 2x+→1 using userReserves + reserve.priceInUsd if present */
+/** 15% — Risk “safety” (0..1): price-free proxy using token balances and debt in *token units*. */
 export async function getRiskSafety01(user: `0x${string}`): Promise<number> {
-  const lower = user.toLowerCase();
-
-  const q1 = `
-    query RiskExposure($user: ID!) {
-      userReserves(where: { user: $user }) {
-        reserve { decimals priceInUsd }
+  const q = `
+    query($u:String!){
+      userReserves(where:{ user:$u }){
+        reserve { decimals }
         scaledATokenBalance
         scaledVariableDebt
         principalStableDebt
         usageAsCollateralEnabledOnUser
       }
     }`;
+  const d: any = await postAaveSubgraph(q, { u: lower(user) });
+  const rows = Array.isArray(d?.userReserves) ? d.userReserves : [];
 
-  const q2 = `
-    query RiskExposureViaUsers($user: ID!) {
-      users(where: { id: $user }) {
-        id
-        userReserves {
-          reserve { decimals priceInUsd }
-          scaledATokenBalance
-          scaledVariableDebt
-          principalStableDebt
-          usageAsCollateralEnabledOnUser
-        }
-      }
-    }`;
+  let totalDebt = 0;
+  let weightedSafety = 0;
 
-  let d: any;
-  try {
-    d = await postAaveSubgraph<any>(q1, { user: lower });
-  } catch (e: any) {
-    if (String(e.message).includes("no field") || String(e.message).includes("Cannot query field")) {
-      d = await postAaveSubgraph<any>(q2, { user: lower });
-    } else {
-      throw e;
-    }
+  for (const it of rows) {
+    const dec = Number(it?.reserve?.decimals ?? 18);
+    const a   = Number(it?.scaledATokenBalance ?? 0) / 10**dec;
+    const vd  = Number(it?.scaledVariableDebt ?? 0) / 10**dec;
+    const sd  = Number(it?.principalStableDebt ?? 0) / 10**dec;
+    const debt = vd + sd;
+
+    const collateral = (it?.usageAsCollateralEnabledOnUser && a > 0) ? a : 0;
+    const safetyRatio = collateral / (debt + 1e-9);
+
+    totalDebt += debt;
+    weightedSafety += debt * safetyRatio;
   }
 
-  const urs =
-    d?.userReserves ??
-    (Array.isArray(d?.users) ? d.users[0]?.userReserves ?? [] : []);
-
-  let collateralUsd = 0, debtUsd = 0;
-  for (const u of urs) {
-    const dec   = Number(u.reserve?.decimals ?? 18);
-    const price = Number(u.reserve?.priceInUsd ?? 0);
-    const aBal  = Number(u.scaledATokenBalance ?? 0) / 10 ** dec;
-    const vDebt = Number(u.scaledVariableDebt ?? 0) / 10 ** dec;
-    const sDebt = Number(u.principalStableDebt ?? 0) / 10 ** dec;
-
-    if (u.usageAsCollateralEnabledOnUser && aBal > 0) {
-      collateralUsd += aBal * price;
-    }
-    debtUsd += (vDebt + sDebt) * price;
+  if (totalDebt <= 0) {
+    // No debt → reasonably safe. Boost if they actually hold collateral.
+    const hasCol = rows.some((it: any) => {
+      const dec = Number(it?.reserve?.decimals ?? 18);
+      const a   = Number(it?.scaledATokenBalance ?? 0) / 10**dec;
+      return it?.usageAsCollateralEnabledOnUser && a > 0;
+    });
+    return hasCol ? 0.85 : 0.7;
   }
 
-  if (collateralUsd <= 0 && debtUsd <= 0) return 0.7;
-  if (collateralUsd <= 0 && debtUsd > 0)  return 0.0;
-
-  const cr = collateralUsd / (debtUsd || 1e-9);
-  return Math.max(0, Math.min((cr - 1.0) / 1.0, 1));
+  const avgSafety = weightedSafety / totalDebt;     // ≈ avg(collateral/debt) in token units
+  const mapped = Math.max(0, Math.min((avgSafety - 1.0) / 1.0, 1.0)); // 1x→0, 2x+→1
+  return mapped;
 }
 
-/** Repayment history factor (0..1), Aave-native uses user filter here */
-export async function getRepaymentHistory01(user: `0x${string}`, first = 100): Promise<number> {
+/** 30% — Repayment history (0..1): recent, frequent repayments score higher. Supports user/account. */
+export async function getRepaymentHistory01(user: `0x${string}`, first = 200): Promise<number> {
+  const u = lower(user);
+  const qA = `
+    query($u:String!,$first:Int!){
+      repays(where:{ user:$u }, orderBy: timestamp, orderDirection: desc, first: $first){ timestamp }
+    }`;
+  const qB = `
+    query($u:String!,$first:Int!){
+      repays(where:{ account:$u }, orderBy: timestamp, orderDirection: desc, first: $first){ timestamp }
+    }`;
+
+  let list: any[] = [];
+  try {
+    const a: any = await postAaveSubgraph(qA, { u, first });
+    list = a?.repays ?? [];
+    if (!list.length) {
+      const b: any = await postAaveSubgraph(qB, { u, first });
+      list = b?.repays ?? [];
+    }
+  } catch {
+    const b: any = await postAaveSubgraph(qB, { u, first });
+    list = b?.repays ?? [];
+  }
+  if (!list.length) return 0;
+
+  // Exponential decay: last 30 days weigh the most
+  const now = Math.floor(Date.now()/1000);
+  let s = 0;
+  for (const r of list) {
+    const ts = Number(r?.timestamp ?? 0);
+    if (!ts) continue;
+    const ageDays = (now - ts) / 86400;
+    s += Math.exp(-ageDays / 30);
+  }
+  return Math.min(s / 10, 1);
+}
+
+/** 15% — Account age proxy (0..1): use earliest userTransaction; fallback to activity. */
+export async function getAccountAge01(user: `0x${string}`): Promise<number> {
   const q = `
-    query Repays($user: String!, $first: Int!) {
-      repays(where:{ user:$user }, orderBy: timestamp, orderDirection: desc, first: $first) {
-        amount
+    query($u:String!){
+      userTransactions(where:{ user:$u }, orderBy: timestamp, orderDirection: asc, first: 1) {
         timestamp
-        txHash
       }
     }`;
-  const d = await postAaveSubgraph<any>(q, { user: user.toLowerCase(), first });
-  const repays = d?.repays ?? [];
-  if (!repays.length) return 0;
-
-  const now = Math.floor(Date.now() / 1000);
-  let score = 0;
-  for (const r of repays) {
-    const ageDays = (now - Number(r.timestamp)) / 86400;
-    const w = Math.exp(-ageDays / 30); // recent repays weigh more
-    score += w;
+  try {
+    const d: any = await postAaveSubgraph(q, { u: lower(user) });
+    const ts = Number(d?.userTransactions?.[0]?.timestamp ?? 0);
+    if (!ts) return 0.5; // unknown → middle
+    const ageDays = (Math.floor(Date.now()/1000) - ts) / 86400;
+    // Map 0d → 0.2, 365d+ → 1.0
+    return Math.max(0.2, Math.min(0.2 + (ageDays / 365), 1.0));
+  } catch {
+    // Fallback: correlate with recent activity
+    const act = await getWalletActivity01(user);
+    return Math.min(0.2 + 0.8 * act, 1);
   }
-  return Math.min(score / 10, 1);
+}
+
+/** 10% — Social proof: stub (return 0; you can wire ENS/Farcaster later) */
+export async function getSocialProof01(_: `0x${string}`): Promise<number> {
+  return 0;
 }

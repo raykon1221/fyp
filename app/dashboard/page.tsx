@@ -19,6 +19,7 @@ const pinata = new PinataSDK({
   pinataGateway: "example-gateway.mypinata.cloud",
 });
 
+
 async function readScoreServer(user: `0x${string}`) {
   const r = await fetch("/api/score-read", {
     method: "POST",
@@ -50,7 +51,34 @@ async function refreshScore(user: `0x${string}`) {
 export default function DashboardPage() {
   const { address, isConnected } = useAccount();
   const router = useRouter();
-
+  const items = [
+    {
+      label: "On-chain Activity",
+      value: 0,
+      max: 100,
+      color: "from-cyan-500 to-purple-500",
+      onClick: () => router.push("/onchain"),
+    },
+    {
+      label: "DeFi Usage",
+      value: 0,
+      max: 50,
+      color: "from-purple-500 to-pink-500",
+    },
+    {
+      label: "NFT Holdings",
+      value: 0,
+      max: 50,
+      color: "from-pink-500 to-cyan-500",
+    },
+    {
+      label: "Social Score",
+      value: 0,
+      max: 50,
+      color: "from-cyan-500 to-pink-500",
+    },
+  ];
+  
   // If not connected, redirect to home
   useEffect(() => {
     if (!isConnected) {
@@ -127,7 +155,7 @@ export default function DashboardPage() {
                 <ConnectButton />
               </div>
 
-              <div className="p-6 space-y-6">
+              <div className="p-6 space-y-6 ">
                 <Card className="bg-slate-900 border-slate-800">
                   <CardContent className="p-8">
                     <div className="flex items-center justify-between">
@@ -284,49 +312,22 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   <h2 className="text-2xl font-bold">Score Breakdown</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {[
-                      {
-                        label: "On-chain Activity",
-                        value: 0,
-                        max: 100,
-                        color: "from-cyan-500 to-purple-500",
-                      },
-                      {
-                        label: "DeFi Usage",
-                        value: 0,
-                        max: 50,
-                        color: "from-purple-500 to-pink-500",
-                      },
-                      {
-                        label: "NFT Holdings",
-                        value: 0,
-                        max: 50,
-                        color: "from-pink-500 to-cyan-500",
-                      },
-                      {
-                        label: "Social Score",
-                        value: 0,
-                        max: 50,
-                        color: "from-cyan-500 to-pink-500",
-                      },
-                    ].map((item, index) => (
-                      <Card key={index} className="bg-slate-900 border-slate-800">
+                    {items.map((item, index) => (
+                      <Card
+                        key={index}
+                        onClick={item.onClick}
+                        className={`bg-slate-900 border-slate-800 transition cursor-pointer hover:bg-slate-800 active:scale-[0.98]`}
+                      >
                         <CardContent className="p-4">
                           <div className="space-y-3">
-                            <div className="text-sm text-slate-400">
-                              {item.label}
-                            </div>
+                            <div className="text-sm text-slate-400">{item.label}</div>
                             <div className="text-2xl font-bold">{item.value}</div>
-                            <div className="text-xs text-slate-500">
-                              Max: {item.max}
-                            </div>
+                            <div className="text-xs text-slate-500">Max: {item.max}</div>
                             <div className="w-full bg-slate-800 rounded-full h-2">
                               <div
                                 className={`h-2 rounded-full bg-gradient-to-r ${item.color}`}
-                                style={{
-                                  width: `${(item.value / item.max) * 100}%`,
-                                }}
-                              ></div>
+                                style={{ width: `${(item.value / item.max) * 100}%` }}
+                              />
                             </div>
                           </div>
                         </CardContent>

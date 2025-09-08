@@ -1,10 +1,9 @@
 "use client";
 
 import { formatUnits } from "viem";
-import type { RepayRow } from "@/lib/subgraph";
-import { useMemo } from "react";
+import type { BorrowRow } from "@/lib/subgraph";
 
-type Props = { rows: RepayRow[]; tokenDecimals?: number };
+type Props = { rows: BorrowRow[]; tokenDecimals?: number };
 
 const dtf = new Intl.DateTimeFormat("en-GB", {
   timeZone: "UTC",
@@ -25,12 +24,8 @@ function fmtAmount(raw: string, decimals: number) {
     return raw;
   }
 }
-function fmtTime(sec: string) {
-  const d = new Date(Number(sec) * 1000);
-  return isNaN(d.getTime()) ? sec : d.toLocaleString();
-}
 
-export default function RepaysTable({ rows, tokenDecimals = 18 }: Props) {
+export default function BorrowsTable({ rows, tokenDecimals = 18 }: Props) {
   const explorer =
     process.env.NEXT_PUBLIC_EXPLORER_BASE || "https://etherscan.io";
 
@@ -41,15 +36,15 @@ export default function RepaysTable({ rows, tokenDecimals = 18 }: Props) {
           <tr className="text-left bg-gray-50">
             <th className="py-2 px-3">Tx</th>
             <th className="py-2 px-3">Amount</th>
+            <th className="py-2 px-3">Borrow Rate</th>
             <th className="py-2 px-3">Time (UTC)</th>
-            <th className="py-2 px-3">Use aTokens</th> 
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
               <td colSpan={4} className="py-6 px-3 text-gray-500">
-                No repays found.
+                No borrows found.
               </td>
             </tr>
           ) : (
@@ -71,12 +66,9 @@ export default function RepaysTable({ rows, tokenDecimals = 18 }: Props) {
                   <td className="py-2 px-3">
                     {fmtAmount(r.amount, tokenDecimals)}
                   </td>
+                  <td className="py-2 px-3">{r.borrowRate}</td>
                   <td className="py-2 px-3">
-                    {/* prevent hydration warning if something still differs */}
                     <span suppressHydrationWarning>{timeText}</span>
-                  </td>
-                  <td className="py-2 px-3">
-                    {r.useATokens ? "Yes" : "No"} 
                   </td>
                 </tr>
               );

@@ -3,14 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount } from "wagmi";
-import RepaysTable from "@/components/repaytable";
-import { fetchRepaysByAccount } from "@/lib/subgraph";
+import SuppliesTable from "@/components/supplytable";
+import { fetchSuppliesByAccount } from "@/lib/subgraph";
 
 const isHexAddress = (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v);
 
-export default function RepaysPage() {
+export default function SuppliesPage() {
   const { address: connected, isConnected } = useAccount();
-  const [mounted, setMounted] = useState(false); // 👈
+  const [mounted, setMounted] = useState(false);
   const [manualAddress, setManualAddress] = useState("");
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -20,7 +20,7 @@ export default function RepaysPage() {
 
   useEffect(() => {
     setMounted(true);
-  }, []); // 👈 ensure client-only render
+  }, []);
 
   const activeAddress = useMemo(() => {
     const m = manualAddress.trim();
@@ -42,7 +42,7 @@ export default function RepaysPage() {
     try {
       setLoading(true);
       setErr(null);
-      const data = await fetchRepaysByAccount(
+      const data = await fetchSuppliesByAccount(
         activeAddress,
         pageSize,
         page * pageSize
@@ -57,7 +57,7 @@ export default function RepaysPage() {
   }
 
   useEffect(() => {
-    if (mounted && activeAddress) load(); // 👈 only after mount
+    if (mounted && activeAddress) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, activeAddress, page]);
 
@@ -66,7 +66,6 @@ export default function RepaysPage() {
   }, [manualAddress]);
 
   if (!mounted) {
-    // render nothing or a skeleton to avoid SSR/CSR mismatch
     return <main style={{ padding: 24 }}>Loading…</main>;
   }
 
@@ -83,7 +82,7 @@ export default function RepaysPage() {
           alignItems: "center",
         }}
       >
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Repays</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Supplies</h1>
         <ConnectButton />
       </div>
 
@@ -121,7 +120,7 @@ export default function RepaysPage() {
 
       {!isConnected && !manualAddress && (
         <div style={{ marginBottom: 12 }}>
-          Connect your wallet or paste an address to view repay history.
+          Connect your wallet or paste an address to view supply history.
         </div>
       )}
 
@@ -129,7 +128,7 @@ export default function RepaysPage() {
         <div style={{ color: "crimson", marginBottom: 12 }}>Error: {err}</div>
       )}
       {loading && <div style={{ marginBottom: 12 }}>Loading…</div>}
-      {!loading && !err && <RepaysTable rows={rows} tokenDecimals={18} />}
+      {!loading && !err && <SuppliesTable rows={rows} tokenDecimals={18} />}
 
       <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
         <button

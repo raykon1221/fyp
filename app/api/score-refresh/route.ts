@@ -1,112 +1,130 @@
 // app/api/score-refresh/route.ts
 import { NextResponse } from "next/server";
-import { createPublicClient, createWalletClient, http, parseAbi, getAddress } from "viem";
+import { createPublicClient, createWalletClient, http, getAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
+import ScoreConsumer from "@abi/ScoreConsumer.json";
+import type { Abi } from "viem";
 
-// ---- env ----
-const RPC_URL       = process.env.SEPOLIA_RPC_URL!;
-const CONSUMER      = process.env.SCORE_CONSUMER as `0x${string}`;
-const UPDATER_PK    = process.env.UPDATER_PRIVATE_KEY as `0x${string}`;
+import {
+  getRepaymentHistory01,
+  getCollateralDiversity01,
+  getAccountAge01,
+  getWalletActivity01,
+  getRiskSafety01,
+  getSocialProof01,
+} from "@/server/factors/aave";
 
-// Replace with your real ABI import if you have it
-const CONSUMER_ABI = parseAbi([
-  "function updateFactors(address user,uint16,uint16,uint16,uint16,uint16,uint16) external",
-  "function updater() view returns (address)",
-]);
-
-// TODO: import your real factor functions here
-async function getRepaymentHistory01(u: `0x${string}`){ return 0.2; }
-async function getCollateralDiversity01(u: `0x${string}`){ return 0.3; }
-async function getAccountAge01(u: `0x${string}`){ return 0.4; }
-async function getWalletActivity01(u: `0x${string}`){ return 0.1; }
-async function getRiskSafety01(u: `0x${string}`){ return 0.6; }
-async function getSocialProof01(u: `0x${string}`){ return 0.05; }
+const RPC_URL = process.env.SEPOLIA_RPC_URL!;
+const CONSUMER = process.env.SCORE_CONSUMER as `0x${string}`;
+const UPDATER_PK = process.env.UPDATER_PRIVATE_KEY as `0x${string}`;
+const CONSUMER_ABI = ScoreConsumer.abi as Abi;
+const toBP = (x: number) =>
+  Math.max(0, Math.min(Math.round(x * 10_000), 10_000));
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
     if (!RPC_URL || !CONSUMER || !UPDATER_PK) {
-      return NextResponse.json(
-        { error: "Missing server env (SEPOLIA_RPC_URL / SCORE_CONSUMER / UPDATER_PRIVATE_KEY)" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Missing envs" }, { status: 500 });
     }
 
-    const body = await req.json().catch(() => ({} as any));
-    const user = body?.user as string;
-    if (!user || !/^0x[0-9a-fA-F]{40}$/.test(user)) {
-      return NextResponse.json({ error: "Invalid user address" }, { status: 400 });
+    const { user: rawUser, demo } = await req.json().catch(() => ({}));
+    if (!rawUser || !/^0x[0-9a-fA-F]{40}$/.test(rawUser)) {
+      return NextResponse.json({ error: "Invalid user" }, { status: 400 });
     }
-    const u = getAddress(user);
+    const user = getAddress(rawUser);
 
-    // 1) compute factors
-    const [repay, diversity, age, activity, risk, social] = await Promise.all([
-      getRepaymentHistory01(u),
-      getCollateralDiversity01(u),
-      getAccountAge01(u),
-      getWalletActivity01(u),
-      getRiskSafety01(u),
-      getSocialProof01(u),
-    ]);
+    // factors in 0..1
+    let repay01: number,
+      diversity01: number,
+      age01: number,
+      activity01: number,
+      risk01: number,
+      social01: number;
+    if (demo) {
+      repay01 = diversity01 = age01 = activity01 = risk01 = social01 = 0.5;
+    } else {
+      [repay01, diversity01, age01, activity01, risk01, social01] =
+        await Promise.all([
+          getRepaymentHistory01(user),
+          getCollateralDiversity01(user),
+          getAccountAge01(user),
+          getWalletActivity01(user),
+          getRiskSafety01(user),
+          getSocialProof01(user),
+        ]);
+    }
 
-    const toBP = (x: number) => Math.max(0, Math.min(Math.round(x * 10000), 10000));
-
-    // 2) prepare clients
-    const account = privateKeyToAccount(UPDATER_PK);
-    const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
-    const walletClient = createWalletClient({ chain: sepolia, transport: http(RPC_URL), account });
-
-    // Sanity: confirm the updater set on-chain
-    const onchainUpdater = await publicClient.readContract({
-      address: CONSUMER,
-      abi: CONSUMER_ABI,
-      functionName: "updater",
-    });
-
-    // helpful info in the response
-    const meta = {
-      user: u,
-      updaterPkAddr: account.address,
-      onchainUpdater,
-      rpc: RPC_URL.slice(0, 40) + "...",
-      consumer: CONSUMER,
-      factors01: { repay, diversity, age, activity, risk, social },
-      factorsBP: {
-        repay: toBP(repay), diversity: toBP(diversity), age: toBP(age),
-        activity: toBP(activity), risk: toBP(risk), social: toBP(social)
+    // validate 0..1
+    const factors01 = {
+      repay01,
+      diversity01,
+      age01,
+      activity01,
+      risk01,
+      social01,
+    };
+    for (const [k, v] of Object.entries(factors01)) {
+      if (!Number.isFinite(v) || v < 0 || v > 1) {
+        return NextResponse.json(
+          { error: `Factor ${k} invalid: ${v}` },
+          { status: 400 }
+        );
       }
+    }
+
+    // basis points
+    const bp = {
+      repay: toBP(repay01),
+      diversity: toBP(diversity01),
+      age: toBP(age01),
+      activity: toBP(activity01),
+      risk: toBP(risk01),
+      social: toBP(social01),
     };
 
-    if (onchainUpdater.toLowerCase() !== account.address.toLowerCase()) {
-      return NextResponse.json(
-        { error: "Updater mismatch. Set the contract updater to your signer.", meta },
-        { status: 403 }
-      );
-    }
+    // clients
+    const account = privateKeyToAccount(UPDATER_PK);
+    const publicClient = createPublicClient({
+      chain: sepolia,
+      transport: http(RPC_URL),
+    });
+    const walletClient = createWalletClient({
+      chain: sepolia,
+      transport: http(RPC_URL),
+      account,
+    });
 
-    // 3) simulate and send
+    // simulate + send + wait
     const { request } = await publicClient.simulateContract({
       address: CONSUMER,
       abi: CONSUMER_ABI,
       functionName: "updateFactors",
       args: [
-        u,
-        toBP(repay),
-        toBP(diversity),
-        toBP(age),
-        toBP(activity),
-        toBP(risk),
-        toBP(social),
+        user,
+        bp.repay,
+        bp.diversity,
+        bp.age,
+        bp.activity,
+        bp.risk,
+        bp.social,
       ],
       account,
     });
+    const hash = await walletClient.writeContract(request);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-    const txHash = await walletClient.writeContract(request);
-    return NextResponse.json({ txHash, meta });
+    return NextResponse.json({
+      txHash: hash,
+      minedInBlock: Number(receipt.blockNumber),
+      user,
+      factors01, // 👈 helpful debug
+      bp, // 👈 helpful debug
+      updater: account.address,
+    });
   } catch (e: any) {
-    // surface full message (temporarily)
     return NextResponse.json(
       { error: e?.shortMessage || e?.message || String(e) },
       { status: 500 }
