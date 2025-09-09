@@ -1,6 +1,6 @@
 "use client";
 
-import { useAccount } from "wagmi";
+import { useAccount, useEnsName } from "wagmi";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -13,6 +13,8 @@ import { ethers } from "ethers";
 // import contractABI from "@/lib/abis/CreditScoreDCS.json";
 import { toast } from "sonner"; 
 import { PinataSDK } from "pinata";
+import { mainnet } from "wagmi/chains";
+import EnsLookup from "@/components/enslookup";
 
 const pinata = new PinataSDK({
   pinataJwt: process.env.PINATA_JWT!,
@@ -78,7 +80,11 @@ export default function DashboardPage() {
       color: "from-cyan-500 to-pink-500",
     },
   ];
-  
+  const { data: ensName, isLoading } = useEnsName({
+    address,
+    chainId: mainnet.id      // 👈 ENS only exists on Ethereum mainnet
+  });
+
   // If not connected, redirect to home
   useEffect(() => {
     if (!isConnected) {
@@ -87,7 +93,7 @@ export default function DashboardPage() {
   }, [isConnected, router]);
 
   // Prevent flash of dashboard before redirect
-  if (!isConnected) return null;
+  if (!isConnected) return <p>Not connected</p>;
 
   // const pinata = new pinataSDK("YOUR_API_KEY", "YOUR_API_SECRET");
 
@@ -223,10 +229,19 @@ export default function DashboardPage() {
                           </div>
                           <div>
                             <div className="text-slate-400 text-sm mb-1">
+                              Ens Name
+                            </div>
+                            <div className="font-mono text-slate-300">
+                              {isLoading ? "…" : ensName ?? "Not Found"}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-slate-400 text-sm mb-1">
                               Last Updated
                             </div>
                             <div className="text-slate-300">26 June 25</div>
                           </div>
+                          {/* <EnsLookup /> */}
                           <Button className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 mt-6">
                             Update Score
                           </Button>

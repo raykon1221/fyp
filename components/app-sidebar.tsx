@@ -43,14 +43,14 @@ const navigationItems = [
     url: "/poaps",
   },
   {
-    title: "Your NFTs",
+    title: "Your",
     icon: BarChart3,
-    url: "/nfts",
+    url: "/",
   },
 ];
 
 function CustomSidebarTrigger() {
-  const { toggleSidebar } = useSidebar()
+  const { toggleSidebar } = useSidebar();
 
   return (
     <button
@@ -59,14 +59,17 @@ function CustomSidebarTrigger() {
     >
       <Menu className="h-6 w-6" />
     </button>
-  )
+  );
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
-    <Sidebar {...props} collapsible="icon" className="border-r border-slate-800 bg-custom-sidebar">
+    <Sidebar
+      {...props}
+      collapsible="icon"
+      className="border-r border-slate-800 bg-custom-sidebar"
+    >
       <SidebarHeader className="p-5">
-
         <div className="flex items-center justify-left group-data-[collapsible=icon]:justify-left">
           <CustomSidebarTrigger />
         </div>
@@ -87,11 +90,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   className="flex items-center gap-3"
                   onClick={(e) => {
                     // Prevent sidebar expansion when clicking menu items
-                    e.stopPropagation()
+                    e.stopPropagation();
                   }}
                 >
                   <item.icon className="w-6 h-6 shrink-0" />
-                  <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
+                  <span className="group-data-[collapsible=icon]:hidden">
+                    {item.title}
+                  </span>
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
