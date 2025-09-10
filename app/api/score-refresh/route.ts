@@ -1,11 +1,9 @@
-// app/api/score-refresh/route.ts
 import { NextResponse } from "next/server";
 import { createPublicClient, createWalletClient, http, getAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import ScoreConsumer from "@abi/ScoreConsumer.json";
 import type { Abi } from "viem";
-
 import {
   getRepaymentHistory01,
   getCollateralDiversity01,
@@ -19,115 +17,138 @@ const RPC_URL = process.env.SEPOLIA_RPC_URL!;
 const CONSUMER = process.env.SCORE_CONSUMER as `0x${string}`;
 const UPDATER_PK = process.env.UPDATER_PRIVATE_KEY as `0x${string}`;
 const CONSUMER_ABI = ScoreConsumer.abi as Abi;
-const toBP = (x: number) =>
-  Math.max(0, Math.min(Math.round(x * 10_000), 10_000));
 
+const scaleFactor = 1e18; // Scale factor for 1e18
 export const runtime = "nodejs";
 
+// Function to calculate factors and manual score
+const calculateFactors = async (user: `0x${string}`) => {
+  try {
+    // Fetch all the factors
+    const collateralDiversity = await getCollateralDiversity01(user);
+    const walletActivity = await getWalletActivity01(user);
+    const riskSafety = await getRiskSafety01(user);
+    const repaymentHistory = await getRepaymentHistory01(user);
+    const accountAge = await getAccountAge01(user);
+    const socialProof = await getSocialProof01(user);
+
+    // Log each factor for debugging
+    console.log("Collateral Diversity:", collateralDiversity);
+    console.log("Wallet Activity:", walletActivity);
+    console.log("Risk Safety:", riskSafety);
+    console.log("Repayment History:", repaymentHistory);
+    console.log("Account Age:", accountAge);
+    console.log("Social Proof:", socialProof);
+
+    // Perform the manual score calculation (without scaling factors to integers)
+    const factors = {
+      repay01: collateralDiversity, 
+      diversity01: walletActivity,
+      age01: riskSafety,
+      activity01: repaymentHistory,
+      risk01: accountAge,
+      social01: socialProof
+    };
+
+    const score = factors.repay01 * 3000 +
+      factors.diversity01 * 2000 +
+      factors.age01 * 1500 +
+      factors.activity01 * 1000 +
+      factors.risk01 * 1500 +
+      factors.social01 * 1000;
+
+    // Normalize the final score to fit between 0 and 1000
+    const finalScore = score / 10000; // This should give you a score between 0 and 1000
+
+    console.log("Calculated Final Score:", finalScore);
+
+    return {
+      collateralDiversity,
+      walletActivity,
+      riskSafety,
+      repaymentHistory,
+      accountAge,
+      socialProof,
+      finalScore, // Return the final score
+    };
+
+  } catch (error) {
+    console.error("Error while fetching factors:", error);
+    return { error: "Error fetching factors" };
+  }
+};
+
+// In your route handler, calculate the factors and score
 export async function POST(req: Request) {
   try {
     if (!RPC_URL || !CONSUMER || !UPDATER_PK) {
-      return NextResponse.json({ error: "Missing envs" }, { status: 500 });
+      return NextResponse.json({ error: "Missing server env" }, { status: 500 });
     }
 
-    const { user: rawUser, demo } = await req.json().catch(() => ({}));
-    if (!rawUser || !/^0x[0-9a-fA-F]{40}$/.test(rawUser)) {
-      return NextResponse.json({ error: "Invalid user" }, { status: 400 });
-    }
-    const user = getAddress(rawUser);
-
-    // factors in 0..1
-    let repay01: number,
-      diversity01: number,
-      age01: number,
-      activity01: number,
-      risk01: number,
-      social01: number;
-    if (demo) {
-      repay01 = diversity01 = age01 = activity01 = risk01 = social01 = 0.5;
-    } else {
-      [repay01, diversity01, age01, activity01, risk01, social01] =
-        await Promise.all([
-          getRepaymentHistory01(user),
-          getCollateralDiversity01(user),
-          getAccountAge01(user),
-          getWalletActivity01(user),
-          getRiskSafety01(user),
-          getSocialProof01(user),
-        ]);
+    const { user } = await req.json().catch(() => ({}));
+    if (!user || !/^0x[a-fA-F0-9]{40}$/.test(user)) {
+      return NextResponse.json({ error: "Invalid user address" }, { status: 400 });
     }
 
-    // validate 0..1
-    const factors01 = {
-      repay01,
-      diversity01,
-      age01,
-      activity01,
-      risk01,
-      social01,
-    };
-    for (const [k, v] of Object.entries(factors01)) {
-      if (!Number.isFinite(v) || v < 0 || v > 1) {
-        return NextResponse.json(
-          { error: `Factor ${k} invalid: ${v}` },
-          { status: 400 }
-        );
-      }
-    }
+    const u = getAddress(user);
 
-    // basis points
-    const bp = {
-      repay: toBP(repay01),
-      diversity: toBP(diversity01),
-      age: toBP(age01),
-      activity: toBP(activity01),
-      risk: toBP(risk01),
-      social: toBP(social01),
+    // Call the calculateFactors function to log and test the factors before pushing to the smart contract
+    const factors = await calculateFactors(u); // This will log the factors and return the calculated final score
+
+    let score = factors.finalScore ?? 0;
+
+    // Normalize the score (multiply by 1000 to bring it back to the correct range)
+    score = score * 1000;
+
+    // Convert factors to the appropriate format for the smart contract
+    const scaledFactors = {
+      repay01: Math.round((factors.repaymentHistory ?? 0) * scaleFactor), // Fallback to 0 if undefined
+      diversity01: Math.round((factors.collateralDiversity ?? 0) * scaleFactor),
+      age01: Math.round((factors.accountAge ?? 0) * scaleFactor),
+      activity01: Math.round((factors.walletActivity ?? 0) * scaleFactor),
+      risk01: Math.round((factors.riskSafety ?? 0) * scaleFactor),
+      social01: Math.round((factors.socialProof ?? 0) * scaleFactor),
     };
 
-    // clients
+    // Your existing logic to interact with the smart contract and send data
+    const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+
+    // Create the account from the updater private key
     const account = privateKeyToAccount(UPDATER_PK);
-    const publicClient = createPublicClient({
-      chain: sepolia,
-      transport: http(RPC_URL),
-    });
-    const walletClient = createWalletClient({
-      chain: sepolia,
-      transport: http(RPC_URL),
-      account,
-    });
 
-    // simulate + send + wait
-    const { request } = await publicClient.simulateContract({
+    const { request } = await client.simulateContract({
       address: CONSUMER,
       abi: CONSUMER_ABI,
       functionName: "updateFactors",
       args: [
-        user,
-        bp.repay,
-        bp.diversity,
-        bp.age,
-        bp.activity,
-        bp.risk,
-        bp.social,
+        u,
+        scaledFactors.repay01,
+        scaledFactors.diversity01,
+        scaledFactors.age01,
+        scaledFactors.activity01,
+        scaledFactors.risk01,
+        scaledFactors.social01,
       ],
       account,
     });
-    const hash = await walletClient.writeContract(request);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+    // Create the wallet client using the updater private key
+    const walletClient = createWalletClient({
+      account,
+      chain: sepolia,
+      transport: http(RPC_URL),
+    });
+
+    const txHash = await walletClient.writeContract(request);
 
     return NextResponse.json({
-      txHash: hash,
-      minedInBlock: Number(receipt.blockNumber),
-      user,
-      factors01, // 👈 helpful debug
-      bp, // 👈 helpful debug
-      updater: account.address,
+      txHash,
+      user: u,
+      factors,
+      score, // Send the normalized score back
     });
+
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.shortMessage || e?.message || String(e) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: e?.message ?? "read failed" }, { status: 500 });
   }
 }

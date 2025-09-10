@@ -1,4 +1,4 @@
-"use client";
+"use client"; // This is required to enable React hooks in this component
 
 import { useState, useMemo, useEffect } from "react";
 import { useAccount } from "wagmi";
@@ -25,9 +25,9 @@ async function readScore(user: `0x${string}`) {
   if (!r.ok) throw new Error(json.error || "read failed");
   return json as {
     user: `0x${string}`;
-    score: number;                // 0..1000
-    factors: Record<string,string>;
-    lastUpdated: number;          // unix seconds
+    score: number; // 0..1000
+    factors: Record<string, string>;
+    lastUpdated: number; // unix seconds
   };
 }
 
@@ -67,7 +67,7 @@ export default function ScorePage() {
         setLoading(false);
       }
     })();
-  }, [active]);
+  }, [active]);  // This will trigger when the active address changes
 
   async function onGetMyScore() {
     if (!active) return;
@@ -123,8 +123,7 @@ export default function ScorePage() {
           spellCheck={false}
           style={{ flex: 1, padding: 8, border: "1px solid #ccc", borderRadius: 6, fontFamily: "monospace" }}
         />
-        <button onClick={() => active && readScore(active).then(s => { setScore(s.score); setLastUpdated(s.lastUpdated); }).catch(e => setErr(e.message))}
-                style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid #ccc" }}>
+        <button onClick={() => active && readScore(active).then(s => { setScore(s.score); setLastUpdated(s.lastUpdated); }).catch(e => setErr(e.message))} style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid #ccc" }}>
           Load
         </button>
       </div>

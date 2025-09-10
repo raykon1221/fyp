@@ -2,7 +2,7 @@
 
 import { useAccount, useEnsName } from "wagmi";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,17 +11,18 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Link } from "lucide-react";
 import { ethers } from "ethers";
 // import contractABI from "@/lib/abis/CreditScoreDCS.json";
-import { toast } from "sonner"; 
+import { toast } from "sonner";
 import { PinataSDK } from "pinata";
 import { mainnet } from "wagmi/chains";
 import EnsLookup from "@/components/enslookup";
+import Image from "next/image";
 
 const pinata = new PinataSDK({
   pinataJwt: process.env.PINATA_JWT!,
   pinataGateway: "example-gateway.mypinata.cloud",
 });
 
-
+// Function to read score from the server
 async function readScoreServer(user: `0x${string}`) {
   const r = await fetch("/api/score-read", {
     method: "POST",
@@ -34,10 +35,11 @@ async function readScoreServer(user: `0x${string}`) {
     user: `0x${string}`;
     score: number;
     factors: Record<string, string>; // 1e18-scaled strings
-    lastUpdated: number;             // unix seconds
+    lastUpdated: number; // unix seconds
   };
 }
 
+// Function to refresh score
 async function refreshScore(user: `0x${string}`) {
   const r = await fetch("/api/score-refresh", {
     method: "POST",
@@ -49,10 +51,14 @@ async function refreshScore(user: `0x${string}`) {
   return json.txHash as string;
 }
 
-
 export default function DashboardPage() {
   const { address, isConnected } = useAccount();
   const router = useRouter();
+  const [score, setScore] = useState<number | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false); // To track if the score is being refreshed
+
   const items = [
     {
       label: "On-chain Activity",
@@ -82,7 +88,7 @@ export default function DashboardPage() {
   ];
   const { data: ensName, isLoading } = useEnsName({
     address,
-    chainId: mainnet.id      // 👈 ENS only exists on Ethereum mainnet
+    chainId: mainnet.id, 
   });
 
   // If not connected, redirect to home
@@ -95,6 +101,43 @@ export default function DashboardPage() {
   // Prevent flash of dashboard before redirect
   if (!isConnected) return <p>Not connected</p>;
 
+  // Fetch score when address changes
+  useEffect(() => {
+    const fetchScore = async () => {
+      if (address) {
+        try {
+          const scoreData = await readScoreServer(address as `0x${string}`);
+          setScore(scoreData.score);
+          setLastUpdated(scoreData.lastUpdated);
+        } catch (e: any) {
+          setErr("Error fetching score");
+        }
+      }
+    };
+
+    fetchScore();
+  }, [address]);
+
+  // Handle the button click for getting or updating the score
+  const handleScoreAction = async () => {
+    if (!address) return;
+
+    setErr(null);
+    setBusy(true);
+    try {
+      // Refresh the score
+      const txHash = await refreshScore(address as `0x${string}`);
+      // After refreshing, fetch the updated score
+      const updatedScore = await readScoreServer(address as `0x${string}`);
+      setScore(updatedScore.score);
+      setLastUpdated(updatedScore.lastUpdated);
+      console.log("Transaction Hash:", txHash);
+    } catch (e: any) {
+      setErr("Error updating score");
+    } finally {
+      setBusy(false);
+    }
+  };
   // const pinata = new pinataSDK("YOUR_API_KEY", "YOUR_API_SECRET");
 
   // async function handleUpdateScore() {
@@ -139,24 +182,27 @@ export default function DashboardPage() {
       <SidebarProvider defaultOpen={false}>
         <AppSidebar />
         <SidebarInset>
-        <div className="flex-1 flex flex-col">
-          <div className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 p-4">
-            <div className="flex items-center justify-center">
-              <div className="flex items-center gap-2 text-white">
-                <Link className="w-4 h-4" />
-                <span className="font-medium">Badges Minting Is Coming Soon!</span>
+          <div className="flex-1 flex flex-col">
+            <div className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 p-4">
+              <div className="flex items-center justify-center">
+                <div className="flex items-center gap-2 text-white">
+                  <Link className="w-4 h-4" />
+                  <span className="font-medium">
+                    Badges Minting Is Coming Soon!
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-
-          
             <div className="flex-1 bg-slate-950 text-white">
               <div className="flex items-center justify-between p-6 border-b border-slate-800">
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold">OpenScore</span>
-                  <span className="text-2xl font-bold bg-gradient-to-r from-cyan-500 to-purple-500 bg-clip-text text-transparent">
-                    X
-                  </span>
+                  <Image
+                    src="/whiteop.png"
+                    alt="openscore logo"
+                    width={130}
+                    height={130}
+                    className="object-contain ml-8"
+                  />
                 </div>
                 <ConnectButton />
               </div>
@@ -187,7 +233,9 @@ export default function DashboardPage() {
                               stroke="url(#gradient)"
                               strokeWidth="8"
                               fill="none"
-                              strokeDasharray={`${0} ${2 * Math.PI * 40}`}
+                              strokeDasharray={`${
+                                ((score ?? 0) * (2 * Math.PI * 40)) / 1000
+                              } ${2 * Math.PI * 40}`}
                               strokeLinecap="round"
                               className="transition-all duration-1000 ease-out"
                             />
@@ -206,8 +254,10 @@ export default function DashboardPage() {
                             </defs>
                           </svg>
                           <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <div className="text-4xl font-bold">0</div>
-                            <div className="text-slate-400">/ 250</div>
+                            <div className="text-4xl font-bold text-slate-200">
+                              {score ?? "—"}
+                            </div>
+                            <div className="text-slate-400">/ 1000</div>
                             <div className="text-sm text-slate-500 mt-1">
                               Open Score
                             </div>
@@ -223,7 +273,9 @@ export default function DashboardPage() {
                             </div>
                             <div className="font-mono text-slate-300">
                               {address
-                                ? `${address.slice(0, 6)}...${address.slice(-4)}`
+                                ? `${address.slice(0, 6)}...${address.slice(
+                                    -4
+                                  )}`
                                 : "Not Connected"}
                             </div>
                           </div>
@@ -239,11 +291,23 @@ export default function DashboardPage() {
                             <div className="text-slate-400 text-sm mb-1">
                               Last Updated
                             </div>
-                            <div className="text-slate-300">26 June 25</div>
+                            <div className="text-slate-300">
+                              {lastUpdated
+                                ? new Date(lastUpdated * 1000).toLocaleString()
+                                : "—"}
+                            </div>
                           </div>
                           {/* <EnsLookup /> */}
-                          <Button className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 mt-6">
-                            Update Score
+                          <Button
+                            className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 mt-6"
+                            onClick={handleScoreAction}
+                            disabled={busy || !address}
+                          >
+                            {busy
+                              ? "Updating..."
+                              : score
+                              ? "Update Score"
+                              : "Get Score"}
                           </Button>
                         </div>
                       </div>
@@ -262,11 +326,13 @@ export default function DashboardPage() {
                               <div className="text-lg font-bold mb-2">
                                 OpenScore
                               </div>
-                              <div className="text-lg font-bold mb-2">SCORE</div>
+                              <div className="text-lg font-bold mb-2">
+                                SCORE
+                              </div>
                               <div className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
                                 0
                               </div>
-                              <div className="text-slate-400">/250</div>
+                              <div className="text-slate-400">/1000</div>
                             </div>
                           </div>
                           <div className="absolute top-4 right-4">
@@ -303,7 +369,9 @@ export default function DashboardPage() {
                               <div className="text-slate-400 text-sm">
                                 Transferable
                               </div>
-                              <div className="text-slate-200">No (Soulbound)</div>
+                              <div className="text-slate-200">
+                                No (Soulbound)
+                              </div>
                             </div>
                             <div>
                               <div className="text-slate-400 text-sm">
@@ -335,13 +403,21 @@ export default function DashboardPage() {
                       >
                         <CardContent className="p-4">
                           <div className="space-y-3">
-                            <div className="text-sm text-slate-400">{item.label}</div>
-                            <div className="text-2xl font-bold">{item.value}</div>
-                            <div className="text-xs text-slate-500">Max: {item.max}</div>
+                            <div className="text-sm text-slate-400">
+                              {item.label}
+                            </div>
+                            <div className="text-2xl font-bold">
+                              {item.value}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              Max: {item.max}
+                            </div>
                             <div className="w-full bg-slate-800 rounded-full h-2">
                               <div
                                 className={`h-2 rounded-full bg-gradient-to-r ${item.color}`}
-                                style={{ width: `${(item.value / item.max) * 100}%` }}
+                                style={{
+                                  width: `${(item.value / item.max) * 100}%`,
+                                }}
                               />
                             </div>
                           </div>
