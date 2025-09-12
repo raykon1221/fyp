@@ -10,17 +10,15 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Link } from "lucide-react";
 import { ethers } from "ethers";
-// import contractABI from "@/lib/abis/CreditScoreDCS.json";
+import CreditScoring from "@abi/CreditScoring.json";
 import { toast } from "sonner";
-import { PinataSDK } from "pinata";
 import { mainnet } from "wagmi/chains";
 import EnsLookup from "@/components/enslookup";
 import Image from "next/image";
-
-const pinata = new PinataSDK({
-  pinataJwt: process.env.PINATA_JWT!,
-  pinataGateway: "example-gateway.mypinata.cloud",
-});
+import MintScoreButton from "@/components/mintScore";
+import { ScoreCard } from "@/components/ScoreCard";
+import { Navbar } from "@/components/Navbar";
+import { MintCard } from "@/components/MintCard";
 
 // Function to read score from the server
 async function readScoreServer(user: `0x${string}`) {
@@ -51,13 +49,96 @@ async function refreshScore(user: `0x${string}`) {
   return json.txHash as string;
 }
 
+async function uploadToPinata(metadata: any, score: number) {
+  const enrichedMetadata = {
+    ...metadata,
+    image: getBadgeImage(score), // 👈 add NFT image here
+  };
+
+  const res = await fetch("/api/pinata-upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ metadata: enrichedMetadata }),
+  });
+
+  if (!res.ok) throw new Error("Failed to upload to Pinata");
+  const { metadataURI } = await res.json();
+  return metadataURI;
+}
+
+function getBadgeImage(score: number | null) {
+  if (!score) {
+    return "https://jade-labour-mink-410.mypinata.cloud/ipfs/bafybeibsy5mv666lymgwyw7kmrunrxuf3le633jmgk5ovgzjd4afqwsbva"; // Bronze (default)
+  }
+  if (score >= 700)
+    return "https://jade-labour-mink-410.mypinata.cloud/ipfs/bafybeibdsnxczesk2msqpzu4fax76nzperszsgqqmpmhavfqrn2jj2abqi"; // Gold
+  if (score >= 300)
+    return "https://jade-labour-mink-410.mypinata.cloud/ipfs/bafybeidltifchw77vnbnqyx6hmo3j7sgcysgpmxo6hzt6veutvisqxfauq"; // Silver
+  return "https://jade-labour-mink-410.mypinata.cloud/ipfs/bafybeibsy5mv666lymgwyw7kmrunrxuf3le633jmgk5ovgzjd4afqwsbva"; // Bronze
+}
+
+// Add a custom type definition for your contract
+type CreditScoringContract = ethers.Contract & {
+  mintDCS: (
+    score: number,
+    tokenURI: string,
+    expiryTs: number,
+    signature: string
+  ) => Promise<ethers.ContractTransaction>;
+};
+
+const contractAddress = "0x9fc2659364f59B916898944aDB72B0E233Ca8Ad9"; // Replace with your actual contract address
+
+// const provider = new ethers.BrowserProvider((window as any).ethereum);
+// const signer = await provider.getSigner();
+// const contract = new ethers.Contract(
+//   contractAddress,
+//   CreditScoring.abi,
+//   signer
+// );
+
+// Create a contract from a signer or provider
+function getCreditScoringContract(signerOrProvider: any) {
+  return new ethers.Contract(
+    contractAddress,
+    CreditScoring.abi,
+    signerOrProvider
+  );
+}
+
+// Nice cooldown formatter
+function formatTime(seconds: number) {
+  const d = Math.floor(seconds / (3600 * 24));
+  const h = Math.floor((seconds % (3600 * 24)) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m ${seconds % 60}s`;
+}
+
 export default function DashboardPage() {
   const { address, isConnected } = useAccount();
   const router = useRouter();
+
   const [score, setScore] = useState<number | null>(null);
+  const [cooldownLeft, setCooldownLeft] = useState<number | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false); // To track if the score is being refreshed
+
+  const [mintedNFT, setMintedNFT] = useState<{
+    uri: string;
+    image: string;
+  } | null>(null);
+
+  // If not connected, redirect to home
+  useEffect(() => {
+    if (!isConnected) router.push("/");
+    if (address) {
+      // fetch score, cooldown etc
+    }
+  }, [isConnected, address, router]);
 
   const items = [
     {
@@ -88,349 +169,306 @@ export default function DashboardPage() {
   ];
   const { data: ensName, isLoading } = useEnsName({
     address,
-    chainId: mainnet.id, 
+    chainId: mainnet.id,
   });
 
-  // If not connected, redirect to home
-  useEffect(() => {
-    if (!isConnected) {
-      router.push("/");
+  const handleMintScore = async () => {
+    if (!address || !score) return;
+
+    try {
+      // 1) Build metadata
+      const metadata = {
+        name: `Credit Score - ${score}`,
+        description: "Soulbound credit score NFT",
+        image: getBadgeImage(score), // ensure image included
+        attributes: [
+          { trait_type: "Credit Score", value: score },
+          {
+            trait_type: "Last Updated",
+            value: new Date().toISOString().split("T")[0],
+          },
+        ],
+      };
+
+      // 2) Upload to Pinata
+      const metadataURI = await uploadToPinata(metadata, score);
+
+      // 3) Get server attestation
+      const res = await fetch("/api/score-attestation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user: address, score, uri: metadataURI }),
+      });
+      if (!res.ok) throw new Error("Failed to get attestation from server");
+      const { expiry, signature } = await res.json();
+
+      // 4) Connect wallet + call mint
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const signer = await provider.getSigner();
+      const contract = getCreditScoringContract(signer);
+
+      const tx = await contract.mintDCS(score, metadataURI, expiry, signature);
+      await tx.wait();
+
+      setTxHash(tx.hash); // show tx hash in UI
+      setMintedNFT({ uri: metadataURI, image: metadata.image }); // trigger preview & metadata fetch
+      toast.success("Minted score successfully!");
+
+      // 5) Refresh cooldown
+      fetchCooldown(address);
+    } catch (e) {
+      console.error("Error minting score:", e);
+      toast.error("Failed to mint score");
     }
-  }, [isConnected, router]);
+  };
 
-  // Prevent flash of dashboard before redirect
-  if (!isConnected) return <p>Not connected</p>;
-
-  // Fetch score when address changes
   useEffect(() => {
-    const fetchScore = async () => {
-      if (address) {
-        try {
-          const scoreData = await readScoreServer(address as `0x${string}`);
-          setScore(scoreData.score);
-          setLastUpdated(scoreData.lastUpdated);
-        } catch (e: any) {
-          setErr("Error fetching score");
+    if (address) fetchCooldown(address);
+  }, [address]);
+
+  const fetchCooldown = async (user: string) => {
+    const provider = new ethers.BrowserProvider((window as any).ethereum);
+    const contract = getCreditScoringContract(provider);
+
+    const lastMintAt = await contract.lastMintAt(user);
+    const mintCooldown = await contract.mintCooldown();
+
+    const now = Math.floor(Date.now() / 1000);
+    const nextMint = Number(lastMintAt) + Number(mintCooldown);
+    const diff = nextMint - now;
+
+    setCooldownLeft(diff > 0 ? diff : 0);
+  };
+
+  useEffect(() => {
+    const fetchMinted = async () => {
+      if (!address) return;
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const contract = new ethers.Contract(
+        contractAddress,
+        CreditScoring.abi,
+        provider
+      );
+
+      const balance = await contract.balanceOf(address, 1); // DCS_ID = 1
+      if (balance > 0) {
+        const scoreData = await contract.getCreditScore(address);
+        if (scoreData.uri) {
+          const res = await fetch(
+            scoreData.uri.replace("ipfs://", "https://ipfs.io/ipfs/")
+          );
+          const metadata = await res.json();
+          setMintedNFT({
+            uri: scoreData.uri,
+            image: metadata.image,
+          });
         }
       }
     };
 
-    fetchScore();
+    fetchMinted();
   }, [address]);
 
-  // Handle the button click for getting or updating the score
   const handleScoreAction = async () => {
     if (!address) return;
-
     setErr(null);
+
     setBusy(true);
     try {
       // Refresh the score
       const txHash = await refreshScore(address as `0x${string}`);
-      // After refreshing, fetch the updated score
       const updatedScore = await readScoreServer(address as `0x${string}`);
       setScore(updatedScore.score);
       setLastUpdated(updatedScore.lastUpdated);
-      console.log("Transaction Hash:", txHash);
-    } catch (e: any) {
+      setTxHash(txHash);
+    } catch (e) {
+      console.error(e);
+      toast.error("Error updating score");
       setErr("Error updating score");
     } finally {
       setBusy(false);
     }
   };
-  // const pinata = new pinataSDK("YOUR_API_KEY", "YOUR_API_SECRET");
-
-  // async function handleUpdateScore() {
-  //   try {
-  //     if (!address) return;
-
-  //     // 1. Connect to contract
-  //     const provider = new ethers.BrowserProvider(window.ethereum);
-  //     const signer = await provider.getSigner();
-  //     const contract = new ethers.Contract("YOUR_CONTRACT_ADDRESS", contractABI, signer);
-
-  //     // 2. Get score from contract
-  //     const score = await contract.calculateScore(address);
-
-  //     // 3. Build metadata
-  //     const metadata = {
-  //       name: `D Credit Score – ${score}`,
-  //       description: "Soulbound credit score NFT",
-  //       attributes: [
-  //         { trait_type: "Credit Score", value: score },
-  //         { trait_type: "Last Updated", value: new Date().toISOString().split("T")[0] }
-  //       ]
-  //     };
-
-  //     // 4. Upload to Pinata
-  //     const result = await pinata.pinJSONToIPFS(metadata);
-  //     const metadataURI = `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
-
-  //     // 5. Call mint function
-  //     const tx = await contract.mintDCS(address, score, metadataURI);
-  //     await tx.wait();
-
-  //       toast.success("Minted DCS NFT successfully!");
-  //     } catch (err) {
-  //       console.error("Error minting score:", err);
-  //       toast.error("Failed to mint score NFT.");
-  //     }
-  //   }
 
   return (
     <div className="flex min-h-screen bg-slate-950">
-      <SidebarProvider defaultOpen={false}>
-        <AppSidebar />
-        <SidebarInset>
-          <div className="flex-1 flex flex-col">
-            <div className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 p-4">
-              <div className="flex items-center justify-center">
-                <div className="flex items-center gap-2 text-white">
-                  <Link className="w-4 h-4" />
-                  <span className="font-medium">
-                    Badges Minting Is Coming Soon!
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="flex-1 bg-slate-950 text-white">
-              <div className="flex items-center justify-between p-6 border-b border-slate-800">
-                <div className="flex items-center gap-2">
-                  <Image
-                    src="/whiteop.png"
-                    alt="openscore logo"
-                    width={130}
-                    height={130}
-                    className="object-contain ml-8"
+      {!isConnected ? (
+        <p>Not connected</p>
+      ) : (
+        <SidebarProvider defaultOpen={false}>
+          <AppSidebar />
+          <SidebarInset>
+            <div className="flex-1 flex flex-col">
+              <Navbar />
+              <div className="flex-1 bg-slate-950 text-white">
+                <div className="p-6 space-y-6 ">
+                  <ScoreCard
+                    score={score}
+                    address={address}
+                    ensName={ensName}
+                    isLoading={isLoading}
+                    lastUpdated={lastUpdated}
+                    txHash={txHash}
+                    busy={busy}
+                    err={err} // 👈 new prop
+                    handleScoreAction={handleScoreAction}
                   />
-                </div>
-                <ConnectButton />
-              </div>
+                  <div className="space-y-4">
+                    <h2 className="text-2xl font-bold">
+                      OpenScore as DCS Token
+                    </h2>
 
-              <div className="p-6 space-y-6 ">
-                <Card className="bg-slate-900 border-slate-800">
-                  <CardContent className="p-8">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="relative w-64 h-64 mx-auto mb-6">
-                          <svg
-                            className="w-full h-full transform -rotate-90"
-                            viewBox="0 0 100 100"
-                          >
-                            <circle
-                              cx="50"
-                              cy="50"
-                              r="40"
-                              stroke="currentColor"
-                              strokeWidth="8"
-                              fill="none"
-                              className="text-slate-800"
-                            />
-                            <circle
-                              cx="50"
-                              cy="50"
-                              r="40"
-                              stroke="url(#gradient)"
-                              strokeWidth="8"
-                              fill="none"
-                              strokeDasharray={`${
-                                ((score ?? 0) * (2 * Math.PI * 40)) / 1000
-                              } ${2 * Math.PI * 40}`}
-                              strokeLinecap="round"
-                              className="transition-all duration-1000 ease-out"
-                            />
-                            <defs>
-                              <linearGradient
-                                id="gradient"
-                                x1="0%"
-                                y1="0%"
-                                x2="100%"
-                                y2="0%"
-                              >
-                                <stop offset="0%" stopColor="#a855f7" />
-                                <stop offset="50%" stopColor="#ec4899" />
-                                <stop offset="100%" stopColor="#06b6d4" />
-                              </linearGradient>
-                            </defs>
-                          </svg>
-                          <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <div className="text-4xl font-bold text-slate-200">
-                              {score ?? "—"}
-                            </div>
-                            <div className="text-slate-400">/ 1000</div>
-                            <div className="text-sm text-slate-500 mt-1">
-                              Open Score
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex-1 pl-8">
-                        <div className="space-y-4">
-                          <div>
-                            <div className="text-slate-400 text-sm mb-1">
-                              Wallet Address
-                            </div>
-                            <div className="font-mono text-slate-300">
-                              {address
-                                ? `${address.slice(0, 6)}...${address.slice(
-                                    -4
-                                  )}`
-                                : "Not Connected"}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-slate-400 text-sm mb-1">
-                              Ens Name
-                            </div>
-                            <div className="font-mono text-slate-300">
-                              {isLoading ? "…" : ensName ?? "Not Found"}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-slate-400 text-sm mb-1">
-                              Last Updated
-                            </div>
-                            <div className="text-slate-300">
-                              {lastUpdated
-                                ? new Date(lastUpdated * 1000).toLocaleString()
-                                : "—"}
-                            </div>
-                          </div>
-                          {/* <EnsLookup /> */}
-                          <Button
-                            className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 mt-6"
-                            onClick={handleScoreAction}
-                            disabled={busy || !address}
-                          >
-                            {busy
-                              ? "Updating..."
-                              : score
-                              ? "Update Score"
-                              : "Get Score"}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <div className="space-y-4">
-                  <h2 className="text-2xl font-bold">OpenScore as SBT</h2>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <Card className="bg-slate-900 border-slate-800">
-                      <CardContent className="p-6">
-                        <div className="relative">
-                          <div className="aspect-square bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl border border-slate-700 flex items-center justify-center">
-                            <div className="text-center">
-                              <div className="text-lg font-bold mb-2">
-                                OpenScore
-                              </div>
-                              <div className="text-lg font-bold mb-2">
-                                SCORE
-                              </div>
-                              <div className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                                0
-                              </div>
-                              <div className="text-slate-400">/1000</div>
-                            </div>
-                          </div>
-                          <div className="absolute top-4 right-4">
-                            <div className="w-3 h-3 bg-cyan-400 rounded-full"></div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-slate-900 border-slate-800">
-                      <CardContent className="p-6">
-                        <div className="space-y-4">
-                          <h3 className="text-xl font-semibold">
-                            Soulbound Token Details
-                          </h3>
-                          <div className="space-y-3">
-                            <div>
-                              <div className="text-slate-400 text-sm">
-                                Token Standard
-                              </div>
-                              <div className="text-slate-200">
-                                ERC-721 (Soulbound)
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-slate-400 text-sm">
-                                Network
-                              </div>
-                              <div className="text-slate-200">
-                                Ethereum Mainnet
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-slate-400 text-sm">
-                                Transferable
-                              </div>
-                              <div className="text-slate-200">
-                                No (Soulbound)
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-slate-400 text-sm">
-                                Mint Status
-                              </div>
-                              <div className="text-slate-200">Available</div>
-                            </div>
-                          </div>
-                          <Button
-                            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 mt-4"
-                            disabled
-                          >
-                            Mint SBT (Score Required)
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h2 className="text-2xl font-bold">Score Breakdown</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {items.map((item, index) => (
-                      <Card
-                        key={index}
-                        onClick={item.onClick}
-                        className={`bg-slate-900 border-slate-800 transition cursor-pointer hover:bg-slate-800 active:scale-[0.98]`}
-                      >
-                        <CardContent className="p-4">
-                          <div className="space-y-3">
-                            <div className="text-sm text-slate-400">
-                              {item.label}
-                            </div>
-                            <div className="text-2xl font-bold">
-                              {item.value}
-                            </div>
-                            <div className="text-xs text-slate-500">
-                              Max: {item.max}
-                            </div>
-                            <div className="w-full bg-slate-800 rounded-full h-2">
-                              <div
-                                className={`h-2 rounded-full bg-gradient-to-r ${item.color}`}
-                                style={{
-                                  width: `${(item.value / item.max) * 100}%`,
-                                }}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 ">
+                      <Card className="bg-slate-900 border-slate-800 h-[500px]">
+                        <CardContent className="p-4 h-full flex flex-col items-center justify-center">
+                          {mintedNFT ? (
+                            <div className="flex flex-col items-center">
+                              <Image
+                                src={mintedNFT.image}
+                                alt="Minted NFT"
+                                width={150}
+                                height={150}
+                                className="rounded-lg border border-slate-700"
                               />
+                              <div className="mt-4 text-lg font-bold">
+                                Score: {score}
+                              </div>
+                              <div className="text-sm text-slate-400">
+                                <a
+                                  href={mintedNFT.uri.replace(
+                                    "ipfs://",
+                                    "https://ipfs.io/ipfs/"
+                                  )}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-cyan-400 hover:underline"
+                                >
+                                  View Metadata
+                                </a>
+                              </div>
+                              <div className="text-xs text-slate-500 mt-1">
+                                <a
+                                  href={`https://sepolia.etherscan.io/tx/${txHash}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="hover:underline"
+                                >
+                                  View Transaction
+                                </a>
+                              </div>
                             </div>
-                          </div>
+                          ) : (
+                            <div className="flex flex-col items-center">
+                                <h3 className="text-3xl font-bold text-slate-200 mb-8">Tier Badges</h3>
+
+                              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                {/* Bronze */}
+                                <div className="flex flex-col items-center group">
+                                  <Image
+                                    src="https://jade-labour-mink-410.mypinata.cloud/ipfs/bafybeibsy5mv666lymgwyw7kmrunrxuf3le633jmgk5ovgzjd4afqwsbva"
+                                    alt="Bronze Tier Badge"
+                                    width={200}
+                                    height={200}
+                                    className={`w-48 h-48 md:w-56 md:h-56 object-contain rounded-lg border transition duration-300
+                                      ${score && score < 300
+                                        ? "border-cyan-400 opacity-100"
+                                        : "border-slate-700 opacity-40 group-hover:opacity-100 group-hover:border-cyan-400"}`}
+                                  />
+                                  <div className="mt-4 text-lg text-slate-300">Bronze (0–299)</div>
+                                </div>
+
+                                {/* Silver */}
+                                <div className="flex flex-col items-center group">
+                                  <Image
+                                    src="https://jade-labour-mink-410.mypinata.cloud/ipfs/bafybeidltifchw77vnbnqyx6hmo3j7sgcysgpmxo6hzt6veutvisqxfauq"
+                                    alt="Silver Tier Badge"
+                                    width={300}
+                                    height={300}
+                                    className={`w-48 h-48 md:w-56 md:h-56 object-contain rounded-lg border transition duration-300
+                                      ${score && score >= 300 && score < 700
+                                        ? "border-cyan-400 opacity-100"
+                                        : "border-slate-700 opacity-40 group-hover:opacity-100 group-hover:border-cyan-400"}`}
+                                  />
+                                  <div className="mt-4 text-lg text-slate-300">Silver (300–699)</div>
+                                </div>
+
+                                {/* Gold */}
+                                <div className="flex flex-col items-center group">
+                                  <Image
+                                    src="https://jade-labour-mink-410.mypinata.cloud/ipfs/bafybeibdsnxczesk2msqpzu4fax76nzperszsgqqmpmhavfqrn2jj2abqi"
+                                    alt="Gold Tier Badge"
+                                    width={300}
+                                    height={300}
+                                    className={`w-48 h-48 md:w-56 md:h-56 object-contain rounded-lg border transition duration-300
+                                      ${score && score >= 700
+                                        ? "border-cyan-400 opacity-100"
+                                        : "border-slate-700 opacity-40 group-hover:opacity-100 group-hover:border-cyan-400"}`}
+                                  />
+                                  <div className="mt-4 text-lg text-slate-300">Gold (700–1000)</div>
+                                </div>
+                              </div>
+                              <div
+                                  className="px-6 py-2 rounded-full border border-cyan-400 bg-slate-900 text-2xl font-extrabold 
+                                            bg-gradient-to-r from-cyan-500 to-purple-500 bg-clip-text text-transparent mt-8"
+                                >
+                                  {score ? `Your Score: ${score}` : "No Score Yet"}
+                                </div>
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
-                    ))}
+
+                      <MintCard
+                        mintedNFT={mintedNFT}
+                        score={score}
+                        cooldownLeft={cooldownLeft}
+                        handleMintScore={handleMintScore}
+                        address={address}
+                        className="h-[400px]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h2 className="text-2xl font-bold">Score Breakdown</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {items.map((item, index) => (
+                        <Card
+                          key={index}
+                          onClick={item.onClick}
+                          className={`bg-slate-900 border-slate-800 transition cursor-pointer hover:bg-slate-800 active:scale-[0.98]`}
+                        >
+                          <CardContent className="p-4">
+                            <div className="space-y-3">
+                              <div className="text-sm text-slate-400">
+                                {item.label}
+                              </div>
+                              <div className="text-2xl font-bold">
+                                {item.value}
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                Max: {item.max}
+                              </div>
+                              <div className="w-full bg-slate-800 rounded-full h-2">
+                                <div
+                                  className={`h-2 rounded-full bg-gradient-to-r ${item.color}`}
+                                  style={{
+                                    width: `${(item.value / item.max) * 100}%`,
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </SidebarInset>
-      </SidebarProvider>
+          </SidebarInset>
+        </SidebarProvider>
+      )}
     </div>
   );
 }

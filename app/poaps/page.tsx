@@ -89,16 +89,27 @@ export default function PoapPage() {
   };
 
   // derive distinct years
-  const years = React.useMemo(() => {
-    const set = new Set<number>();
-    poaps.forEach((p) => {
-      const y =
-        p.event?.year ??
-        (p.event?.start_date ? parseInt((p.event.start_date.split("-").pop() || "").replace(/\D/g, ""), 10) : undefined);
-      if (y && !Number.isNaN(y)) set.add(y);
-    });
-    return Array.from(set).sort((a, b) => b - a);
+const years = React.useMemo(() => {
+  const yearArr: number[] = [];
+
+  poaps.forEach((p) => {
+    const y =
+      p.event?.year ??
+      (p.event?.start_date
+        ? parseInt(
+            (p.event.start_date.split("-").pop() || "").replace(/\D/g, ""),
+            10
+          )
+        : undefined);
+
+    if (y && !Number.isNaN(y) && !yearArr.includes(y)) {
+      yearArr.push(y);
+    }
+  });
+
+    return yearArr.sort((a, b) => b - a);
   }, [poaps]);
+
 
   // filter + sort
   const filtered = React.useMemo(() => {
@@ -341,7 +352,7 @@ export default function PoapPage() {
                     <div className="text-sm mt-1">{error}</div>
                   </div>
                 ) : filtered.length === 0 ? (
-                  <div className="rounded-xl border border-slate-800 p-8 text-center text-slate-400">
+                  <div className="rounded-xl border border-slate-800 p-8 text-center text-slate-200">
                     No POAPs found. Try another address/email, or adjust filters.
                   </div>
                 ) : (
@@ -363,18 +374,18 @@ export default function PoapPage() {
                           )}
                           <div className="p-4 space-y-2">
                             <div className="font-medium line-clamp-2">{ev.name || "Untitled Event"}</div>
-                            <div className="text-xs text-slate-400">
+                            <div className="text-xs text-slate-200">
                               {ev.start_date ? ev.start_date : "—"} {ev.end_date ? `→ ${ev.end_date}` : ""}
                             </div>
                             {(ev.city || ev.country) && (
-                              <div className="text-xs text-slate-400">
+                              <div className="text-xs text-slate-200">
                                 {[ev.city, ev.country].filter(Boolean).join(", ")}
                               </div>
                             )}
-                            <div className="text-[11px] text-slate-500 break-all">
+                            <div className="text-[11px] text-slate-200 break-all">
                               Owner: {item.owner ?? "—"}
                             </div>
-                            <div className="text-[11px] text-slate-500">
+                            <div className="text-[11px] text-slate-200">
                               Created: {item.created ?? "—"}
                             </div>
                           </div>

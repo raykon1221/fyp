@@ -42,6 +42,7 @@ export function Footer() {
                 src="/blackop.png"
                 alt="openscore logo"
                 fill
+                priority   
                 className="object-contain"
               />
             </div>
