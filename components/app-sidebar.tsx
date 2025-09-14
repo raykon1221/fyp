@@ -8,7 +8,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
 import {
@@ -18,35 +17,20 @@ import {
   Star,
   BarChart3,
   Menu,
+  CircleGauge,
+  SquareChartGantt,
+  GalleryVerticalEnd,
+  Ticket,
+  Tag,
 } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 const navigationItems = [
-  {
-    title: "Dashboard",
-    icon: User,
-    url: "/dashboard",
-    isActive: true,
-  },
-  {
-    title: "On-chain Activity",
-    icon: Building2,
-    url: "/onchain",
-  },
-  {
-    title: "Your NFTs",
-    icon: RotateCcw,
-    url: "/nfts",
-  },
-  {
-    title: "Your POAPs",
-    icon: Star,
-    url: "/poaps",
-  },
-  {
-    title: "Your",
-    icon: BarChart3,
-    url: "/",
-  },
+  { title: "Dashboard", icon: CircleGauge, url: "/dashboard" },
+  { title: "On-chain Activity", icon: SquareChartGantt, url: "/onchain" },
+  { title: "Your NFTs", icon: GalleryVerticalEnd, url: "/nfts" },
+  { title: "Your POAPs", icon: Ticket, url: "/poaps" },
+  { title: "ENS Check", icon: Tag, url: "/" },
 ];
 
 function CustomSidebarTrigger() {
@@ -63,44 +47,51 @@ function CustomSidebarTrigger() {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const pathname = usePathname(); // 👈 get current URL path
+
   return (
     <Sidebar
       {...props}
       collapsible="icon"
-      className="border-r border-slate-800 bg-custom-sidebar"
+      className="border-r border-slate-200 bg-custom-sidebar"
     >
       <SidebarHeader className="p-5">
         <div className="flex items-center justify-left group-data-[collapsible=icon]:justify-left">
           <CustomSidebarTrigger />
         </div>
-        {/* <CustomSidebarTrigger /> */}
       </SidebarHeader>
-      <SidebarContent className="px-6">
-        <SidebarMenu className="space-y-4">
-          {navigationItems.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton
-                asChild
-                isActive={item.isActive}
-                tooltip={item.title}
-                className="w-full h-12 rounded-lg justify-start group-data-[collapsible=icon]:justify-center data-[active=true]:bg-gradient-to-r data-[active=true]:from-purple-500 data-[active=true]:to-pink-500 hover:bg-slate-800"
-              >
-                <a
-                  href={item.url}
-                  className="flex items-center gap-3"
-                  onClick={(e) => {
-                    // Prevent sidebar expansion when clicking menu items
-                    e.stopPropagation();
-                  }}
+
+      <SidebarContent className="px-4">
+        <SidebarMenu className="space-y-5">
+          {navigationItems.map((item) => {
+            const isActive = pathname === item.url; // 👈 check match
+            return (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive}
+                  tooltip={item.title}
+                  className="w-full h-12 px-4 rounded-md text-base font-medium justify-start
+                             group-data-[collapsible=icon]:justify-center
+                             transition-all duration-300
+                             data-[active=true]:bg-gradient-to-r from-cyan-400 via-indigo-500 to-purple-600
+                             hover:from-cyan-500 hover:via-indigo-600 hover:to-purple-700
+                             data-[active=true]:text-white shadow-lg"
                 >
-                  <item.icon className="w-6 h-6 shrink-0" />
-                  <span className="group-data-[collapsible=icon]:hidden">
-                    {item.title}
-                  </span>
-                </a>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
+                  <a
+                    href={item.url}
+                    className="flex items-center gap-3"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <item.icon className="w-6 h-6 shrink-0" />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      {item.title}
+                    </span>
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
         </SidebarMenu>
       </SidebarContent>
     </Sidebar>

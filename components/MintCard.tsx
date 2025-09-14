@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 
-export function MintCard({ mintedNFT, score, cooldownLeft, handleMintScore, address }: any) {
+export function MintCard({ mintedNFT, score, cooldownLeft, handleMintScore, address, txHash }: any) {
   const [metadata, setMetadata] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
 
@@ -28,20 +28,46 @@ export function MintCard({ mintedNFT, score, cooldownLeft, handleMintScore, addr
   return (
     <>
       <Card className="bg-slate-900 border-slate-800">
-        <CardContent className="p-4">
-          <div className="space-y-2">
-            <h3 className="text-lg font-semibold text-slate-200">Soulbound Token</h3>
+        <CardContent className="px-6">
+          <h3 className="text-2xl font-bold text-slate-200">Soulbound Token</h3>
 
+          <div className="space-y-4">
+            
             {mintedNFT && (
-              <div className="flex flex-col items-center">
+              <div className="flex flex-col items-center space-y-1">
                 <Image
                   src={mintedNFT.image}
                   alt="Minted NFT"
-                  width={120}
-                  height={120}
+                  width={150}
+                  height={150}
                   className="rounded-lg border border-slate-700"
                 />
-                <div className="mt-2 text-md font-bold">Score: {score}</div>
+                <div className="mt-2 text-white text-md font-bold">Score: {score}</div>
+
+                {/* 🔗 View Metadata + Transaction */}
+                <div className="mt-2 text-center space-y-1">
+                  <a
+                    href={mintedNFT.uri.replace(
+                      "ipfs://",
+                      "https://ipfs.io/ipfs/"
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-cyan-400 hover:underline block"
+                  >
+                    View Metadata
+                  </a>
+                  {txHash && (
+                    <a
+                      href={`https://sepolia.etherscan.io/tx/${txHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-slate-500 hover:underline block"
+                    >
+                      View Transaction
+                    </a>
+                  )}
+                </div>
                 {metadata && (
                   <div className="text-sm text-slate-400 mt-1 text-center">
                     {metadata.description}
@@ -65,7 +91,7 @@ export function MintCard({ mintedNFT, score, cooldownLeft, handleMintScore, addr
                 {metadata.attributes.map((attr: any, idx: number) => (
                   <div
                     key={idx}
-                    className="flex justify-between text-xs text-slate-400"
+                    className="flex justify-between text-md text-slate-200"
                   >
                     <span>{attr.trait_type}</span>
                     <span className="font-semibold text-slate-200">
@@ -77,7 +103,7 @@ export function MintCard({ mintedNFT, score, cooldownLeft, handleMintScore, addr
             )}
 
             <Button
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 mt-3"
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600"
               onClick={() => setShowModal(true)}
               disabled={cooldownLeft && cooldownLeft > 0}
             >

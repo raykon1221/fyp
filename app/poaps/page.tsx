@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Copy, Loader2, RefreshCcw, Search, ShieldCheck, Filter } from "lucide-react";
+import { Navbar } from "@/components/Navbar";
 
 type PoapItem = {
   event?: {
@@ -147,13 +148,7 @@ const years = React.useMemo(() => {
       <SidebarProvider defaultOpen={false}>
         <AppSidebar />
         <SidebarInset>
-          {/* Header */}
-          <div className="bg-gradient-to-r from-cyan-500 to-purple-500 p-4">
-            <div className="flex items-center justify-center">
-              <span className="font-medium text-white text-lg">POAP Dashboard</span>
-            </div>
-          </div>
-
+          <Navbar bannerText="POAP Dashboard" />
           <div className="bg-slate-950 flex-1 p-6 space-y-6">
             {/* Controls strip ABOVE "My POAPs" */}
             <Card className="bg-slate-900 border-slate-800">

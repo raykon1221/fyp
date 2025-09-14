@@ -33,7 +33,7 @@ export function Footer() {
   ];
 
   return (
-    <footer className="bg-purple-300 text-black py-16 px-4">
+    <footer className="bg-white text-black py-16 px-4">
       <div className="max-w-6xl mx-auto">
         <div className="grid md:grid-cols-4 gap-8 mb-12">
           <div>
@@ -47,8 +47,7 @@ export function Footer() {
               />
             </div>
             <p className="text-black leading-relaxed">
-              Building the future of decentralized applications with relational
-              blockchain technology.
+              Building the future of decentralized credit scoring.
             </p>
           </div>
 

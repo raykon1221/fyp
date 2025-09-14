@@ -23,6 +23,7 @@ import {
   BorrowRow,
   SupplyRow,
 } from "@/lib/subgraph";
+import { Navbar } from "@/components/Navbar";
 
 export default function OnchainActivityPage() {
   const [address, setAddress] = useState("");
@@ -63,15 +64,7 @@ export default function OnchainActivityPage() {
         <AppSidebar />
         <SidebarInset>
           <div className="flex-1 flex flex-col">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-cyan-500 to-purple-500 p-4">
-              <div className="flex items-center justify-center">
-                <span className="font-medium text-white text-lg">
-                  Onchain Activity Dashboard
-                </span>
-              </div>
-            </div>
-
+            <Navbar bannerText="On-chain Activity" />
             <div className="bg-slate-950 flex-1 p-6 space-y-6">
               {/* Controls */}
               <Card className="bg-slate-900 border-slate-800">

@@ -4,15 +4,19 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Link } from "lucide-react";
 import Image from "next/image";
 
-export function Navbar() {
+export function Navbar({ bannerText }: { bannerText?: string }) {
   return (
     <div className="flex flex-col">
       {/* Top gradient bar */}
       <div className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 p-4">
         <div className="flex items-center justify-center">
           <div className="flex items-center gap-2 text-white">
-            <Link className="w-4 h-4" />
-            <span className="font-medium">Badges Minting Is Coming Soon!</span>
+            <span className="font-medium"> {bannerText || (
+              <>
+                <Link className="w-4 h-4 inline-block mr-2" />
+                Badges Minting Is Coming Soon!
+              </>
+            )}</span>
           </div>
         </div>
       </div>

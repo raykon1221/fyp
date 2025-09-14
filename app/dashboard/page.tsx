@@ -321,7 +321,7 @@ export default function DashboardPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 ">
                       <Card className="bg-slate-900 border-slate-800 h-[500px]">
                         <CardContent className="p-4 h-full flex flex-col items-center justify-center">
-                          {mintedNFT ? (
+                          {/* {mintedNFT ? (
                             <div className="flex flex-col items-center">
                               <Image
                                 src={mintedNFT.image}
@@ -357,7 +357,7 @@ export default function DashboardPage() {
                                 </a>
                               </div>
                             </div>
-                          ) : (
+                          ) : ( */}
                             <div className="flex flex-col items-center">
                                 <h3 className="text-3xl font-bold text-slate-200 mb-8">Tier Badges</h3>
 
@@ -414,7 +414,7 @@ export default function DashboardPage() {
                                   {score ? `Your Score: ${score}` : "No Score Yet"}
                                 </div>
                             </div>
-                          )}
+                          {/* )} */}
                         </CardContent>
                       </Card>
 
