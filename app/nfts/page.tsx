@@ -42,22 +42,34 @@ export default function NftsPage() {
 
   // UI filters
   const [query, setQuery] = React.useState("");
+  const [customAddress, setCustomAddress] = React.useState(""); // user-pasted address
+  const [activeAddress, setActiveAddress] = React.useState<string | undefined>(undefined); // which address we are showing
+
+  const NETWORK_LABELS: Record<string, string> = {
+    ETH_MAINNET: "Ethereum",
+    BASE_MAINNET: "Base",
+    ARB_MAINNET: "Arbitrum",
+    OPT_MAINNET: "Optimism",
+    MATIC_MAINNET: "Polygon",
+  };
 
   const fetchNfts = React.useCallback(
-    async (pk?: string) => {
-      if (!address) return;
+    async (pk?: string, overrideAddress?: string) => {
+      const addr = overrideAddress || activeAddress;
+      if (!addr) return;
+
       setLoading(true);
       setError(null);
       try {
         const res = await fetch("/api/nfts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address, pageKey: pk, network }),
+          body: JSON.stringify({ address: addr, pageKey: pk, network }),
         });
         const json = await res.json();
-        if (!res.ok || !json.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
+        if (!res.ok || !json.ok)
+          throw new Error(json?.error ?? `HTTP ${res.status}`);
 
-        // if loading next page, append
         if (pk && data?.ownedNfts?.length) {
           const merged: AlchemyResponse = {
             ownedNfts: [...(data.ownedNfts || []), ...(json.data?.ownedNfts || [])],
@@ -77,13 +89,20 @@ export default function NftsPage() {
         setLoading(false);
       }
     },
-    [address, network, data]
+    [activeAddress, network, data]
   );
 
-  // auto-fetch when wallet connects or network changes
+  // when wallet connects, set it as the default active address
   React.useEffect(() => {
-    if (isConnected) fetchNfts(undefined);
-  }, [isConnected, network]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (isConnected && address) {
+      setActiveAddress(address);
+    }
+  }, [isConnected, address]);
+
+  // auto-fetch NFTs when activeAddress or network changes
+  React.useEffect(() => {
+    if (activeAddress) fetchNfts(undefined);
+  }, [activeAddress, network]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const nfts = React.useMemo(() => {
     const list = data?.ownedNfts ?? [];
@@ -100,7 +119,10 @@ export default function NftsPage() {
   const renderSkeletons = (
     <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-4">
       {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="border border-slate-800 rounded-xl overflow-hidden">
+        <div
+          key={i}
+          className="border border-slate-800 rounded-xl overflow-hidden"
+        >
           <div className="h-40 w-full bg-slate-800 animate-pulse" />
           <div className="p-3 space-y-2">
             <div className="h-4 w-2/3 bg-slate-800 animate-pulse rounded" />
@@ -124,15 +146,19 @@ export default function NftsPage() {
                 <div className="flex flex-col lg:flex-row gap-3 lg:items-end lg:justify-between">
                   {/* Left: title + small meta */}
                   <div>
-                    <h2 className="text-xl font-bold">My NFTs</h2>
+                    <h2 className="text-xl text-white font-bold">
+                      NFTs for {activeAddress?.slice(0, 6)}…{activeAddress?.slice(-4)}
+                    </h2>
                     <p className="text-sm text-slate-400">
                       {nfts.length} item{nfts.length === 1 ? "" : "s"}
-                      {query ? ` • “${query}”` : ""} • {network.replace("_MAINNET", "")}
+                      {query ? ` • “${query}”` : ""} •{" "}
+                      {NETWORK_LABELS[network] || network}
                     </p>
                   </div>
 
                   {/* Right: actions */}
                   <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                    {/* Search filter */}
                     <div className="flex items-center gap-2">
                       <Search className="h-4 w-4 text-slate-400" />
                       <Input
@@ -143,7 +169,11 @@ export default function NftsPage() {
                       />
                     </div>
 
-                    <Select value={network} onValueChange={(v) => setNetwork(v)}>
+                    {/* Network select */}
+                    <Select
+                      value={network}
+                      onValueChange={(v) => setNetwork(v)}
+                    >
                       <SelectTrigger className="bg-slate-800 border-slate-700 text-white w-40">
                         <SelectValue placeholder="Network" />
                       </SelectTrigger>
@@ -156,6 +186,26 @@ export default function NftsPage() {
                       </SelectContent>
                     </Select>
 
+                    {/* Custom address input */}
+                    <Input
+                      placeholder="Paste another wallet address"
+                      value={customAddress}
+                      onChange={(e) => setCustomAddress(e.target.value)}
+                      className="bg-slate-800 border-slate-700 text-white w-72"
+                    />
+                    <Button
+                      onClick={() => {
+                        if (customAddress) {
+                          setActiveAddress(customAddress);
+                          fetchNfts(undefined, customAddress);
+                        }
+                      }}
+                      className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600"
+                    >
+                      Load Wallet
+                    </Button>
+
+                    {/* Refresh */}
                     <Button
                       onClick={() => fetchNfts(undefined)}
                       disabled={loading || !isConnected}
@@ -181,8 +231,8 @@ export default function NftsPage() {
             {/* Content */}
             <Card className="bg-slate-900 border-slate-800">
               <CardContent className="p-6">
-                {!isConnected ? (
-                  <div className="rounded-xl border border-slate-800 p-8 text-center text-slate-400">
+                {!isConnected && !activeAddress ? (
+                  <div className="rounded-xl border border-slate-800 p-8 text-center text-slate-200">
                     Connect your wallet to view NFTs.
                   </div>
                 ) : error ? (
@@ -194,7 +244,7 @@ export default function NftsPage() {
                   renderSkeletons
                 ) : nfts.length === 0 ? (
                   <div className="rounded-xl border border-slate-800 p-8 text-center text-slate-400">
-                    No NFTs found on {network.replace("_MAINNET", "")}. Try another network or refresh.
+                    No NFTs found on {NETWORK_LABELS[network] || network}. Try another wallet or network.
                   </div>
                 ) : (
                   <>
@@ -212,7 +262,10 @@ export default function NftsPage() {
                         return (
                           <div
                             key={`${nft?.contract?.address}-${nft?.tokenId}-${i}`}
-                            className="group border border-slate-800 rounded-xl overflow-hidden bg-slate-900 hover:bg-slate-900/80 transition"
+                            className="group border border-slate-500 rounded-xl overflow-hidden 
+                                      bg-gradient-to-r from-cyan-200 to-purple-200 
+                                      hover:from-cyan-400 hover:to-purple-400 
+                                      transition"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
@@ -222,21 +275,24 @@ export default function NftsPage() {
                               loading="lazy"
                             />
                             <div className="p-3 space-y-1.5">
-                              <div className="text-sm font-medium line-clamp-2">{name}</div>
+                              <div className="text-sm font-bold line-clamp-2">
+                                {name}
+                              </div>
                               {nft?.description && (
-                                <div className="text-[11px] opacity-70 line-clamp-2">
+                                <div className="text-[11px] opacity-90 line-clamp-2">
                                   {nft.description}
                                 </div>
                               )}
                               <div className="text-[11px] opacity-60 mt-1">
-                                #{nft?.tokenId} • {nft?.contract?.address?.slice(0, 10)}…
+                                #{nft?.tokenId} •{" "}
+                                {nft?.contract?.address?.slice(0, 10)}…
                               </div>
                             </div>
                           </div>
                         );
                       })}
                     </div>
-
+                    
                     <div className="flex justify-center mt-6">
                       {pageKey && (
                         <Button

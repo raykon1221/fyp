@@ -1,6 +1,6 @@
 "use client";
 
-import { useAccount, useEnsName } from "wagmi";
+import { useAccount, useEnsName, useChainId, useSwitchChain } from "wagmi";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -87,17 +87,8 @@ type CreditScoringContract = ethers.Contract & {
   ) => Promise<ethers.ContractTransaction>;
 };
 
-const contractAddress = "0x9fc2659364f59B916898944aDB72B0E233Ca8Ad9"; // Replace with your actual contract address
+const contractAddress = "0x9fc2659364f59B916898944aDB72B0E233Ca8Ad9"; 
 
-// const provider = new ethers.BrowserProvider((window as any).ethereum);
-// const signer = await provider.getSigner();
-// const contract = new ethers.Contract(
-//   contractAddress,
-//   CreditScoring.abi,
-//   signer
-// );
-
-// Create a contract from a signer or provider
 function getCreditScoringContract(signerOrProvider: any) {
   return new ethers.Contract(
     contractAddress,
@@ -119,7 +110,6 @@ function formatTime(seconds: number) {
 export default function DashboardPage() {
   const { address, isConnected } = useAccount();
   const router = useRouter();
-
   const [score, setScore] = useState<number | null>(null);
   const [cooldownLeft, setCooldownLeft] = useState<number | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
@@ -174,7 +164,6 @@ export default function DashboardPage() {
 
   const handleMintScore = async () => {
     if (!address || !score) return;
-
     try {
       // 1) Build metadata
       const metadata = {
@@ -189,7 +178,6 @@ export default function DashboardPage() {
           },
         ],
       };
-
       // 2) Upload to Pinata
       const metadataURI = await uploadToPinata(metadata, score);
 
@@ -289,6 +277,32 @@ export default function DashboardPage() {
       setBusy(false);
     }
   };
+
+  const chainId = useChainId();          // current chain id
+  const { switchChain } = useSwitchChain(); // switch function
+
+  // Sepolia chain ID
+  const SEPOLIA_CHAIN_ID = 11155111;
+
+  // If wrong network, render a prompt
+  if (isConnected && chainId !== SEPOLIA_CHAIN_ID) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
+        <div className="p-8 border border-slate-700 rounded-xl text-center">
+          <h2 className="text-xl font-bold mb-4">Wrong Network</h2>
+          <p className="mb-4">Please switch to Sepolia to access your Dashboard.</p>
+          {switchChain && (
+            <button
+              onClick={() => switchChain({ chainId: SEPOLIA_CHAIN_ID })}
+              className="px-4 py-2 rounded bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600"
+            >
+              Switch to Sepolia
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-950">

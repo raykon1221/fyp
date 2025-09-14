@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useAccount } from "wagmi";   // 👈 get connected wallet
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// import your fetchers
 import {
   fetchRepaysByAccount,
   fetchBorrowsByAccount,
@@ -26,17 +26,21 @@ import {
 import { Navbar } from "@/components/Navbar";
 
 export default function OnchainActivityPage() {
+  const { address: connectedAddress } = useAccount(); // 👈 wagmi hook
+
   const [address, setAddress] = useState("");
-  const [queryType, setQueryType] = useState<"repay" | "borrow" | "supply">(
-    "repay"
-  );
-  const [transactions, setTransactions] = useState<
-    (RepayRow | BorrowRow | SupplyRow)[]
-  >([]);
+  const [queryType, setQueryType] = useState<"repay" | "borrow" | "supply">("repay");
+  const [transactions, setTransactions] = useState<(RepayRow | BorrowRow | SupplyRow)[]>([]);
+
+  // Auto-fill with connected wallet
+  useEffect(() => {
+    if (connectedAddress) {
+      setAddress(connectedAddress);
+    }
+  }, [connectedAddress]);
 
   const fetchTransactions = async () => {
     if (!address) return;
-
     try {
       let data: any[] = [];
 
@@ -55,8 +59,16 @@ export default function OnchainActivityPage() {
     }
   };
 
-  const explorer =
-    process.env.NEXT_PUBLIC_EXPLORER_BASE || "https://etherscan.io";
+  const [txs, setTxs] = useState<any[]>([]);
+  useEffect(() => {
+    const withFormatted = transactions.map((tx) => ({
+      ...tx,
+      formattedTime: new Date(Number(tx.timestamp) * 1000).toLocaleString(),
+    }));
+    setTxs(withFormatted);
+  }, [transactions]);
+
+  const explorer = process.env.NEXT_PUBLIC_EXPLORER_BASE || "https://etherscan.io";
 
   return (
     <div className="flex min-h-screen bg-slate-950 text-white">
@@ -69,9 +81,7 @@ export default function OnchainActivityPage() {
               {/* Controls */}
               <Card className="bg-slate-900 border-slate-800">
                 <CardContent className="p-6 space-y-4">
-                  <h2 className="text-white text-xl font-bold">
-                    Search Transactions
-                  </h2>
+                  <h2 className="text-white text-xl font-bold">Search Transactions</h2>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Input
@@ -82,9 +92,7 @@ export default function OnchainActivityPage() {
                     />
 
                     <Select
-                      onValueChange={(val) =>
-                        setQueryType(val as "repay" | "borrow" | "supply")
-                      }
+                      onValueChange={(val) => setQueryType(val as "repay" | "borrow" | "supply")}
                       defaultValue="repay"
                     >
                       <SelectTrigger className="text-white bg-slate-800 border-slate-700">
@@ -110,9 +118,7 @@ export default function OnchainActivityPage() {
               {/* Table */}
               <Card className="bg-slate-900 border-slate-800">
                 <CardContent className="p-6">
-                  <h2 className="text-white text-xl font-bold mb-4">
-                    Transaction Data
-                  </h2>
+                  <h2 className="text-white text-xl font-bold mb-4">Transaction Data</h2>
                   {transactions.length === 0 ? (
                     <div className="text-slate-500 text-sm">
                       No data yet. Enter a wallet and fetch.
@@ -122,56 +128,39 @@ export default function OnchainActivityPage() {
                       <table className="min-w-full border border-slate-800 text-sm">
                         <thead className="bg-slate-800">
                           <tr>
-                            <th className="text-white px-4 py-2 text-left">
-                              Tx Hash
-                            </th>
-                            <th className="text-white px-4 py-2 text-left">
-                              Amount
-                            </th>
-                            <th className="text-white px-4 py-2 text-left">
-                              Timestamp
-                            </th>
+                            <th className="text-white px-4 py-2 text-left">Tx Hash</th>
+                            <th className="text-white px-4 py-2 text-left">Amount</th>
+                            <th className="text-white px-4 py-2 text-left">Timestamp</th>
                             {queryType === "repay" && (
-                              <th className="text-white px-4 py-2 text-left">
-                                useATokens
-                              </th>
+                              <th className="text-white px-4 py-2 text-left">useATokens</th>
                             )}
                             {queryType === "borrow" && (
-                              <th className="text-white px-4 py-2 text-left">
-                                Borrow Rate
-                              </th>
+                              <th className="text-white px-4 py-2 text-left">Borrow Rate</th>
                             )}
                           </tr>
                         </thead>
                         <tbody>
-                          {transactions.map((tx: any) => (
-                            <tr
-                              key={tx.id}
-                              className="border-t border-slate-800 hover:bg-slate-800"
-                            >
+                          {txs.map((tx: any) => (
+                            <tr key={tx.id} className="border-t border-slate-800 hover:bg-slate-800">
                               <td className="text-white px-4 py-2 font-mono">
                                 <a
-                                className="text-blue-600 underline"
-                                href={`${explorer}/tx/${tx.txHash}`}
-                                target="_blank"
-                                rel="noreferrer"
-                              >{tx.txHash}</a>
+                                  className="text-blue-600 underline"
+                                  href={`${explorer}/tx/${tx.txHash}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {tx.txHash}
+                                </a>
                               </td>
-                              <td className="text-white px-4 py-2">
-                                {tx.amount}
-                              </td>
-                              <td className="text-white px-4 py-2">
-                                {tx.timestamp}
-                              </td>
+                              <td className="text-white px-4 py-2">{tx.amount}</td>
+                              <td className="text-white px-4 py-2">{tx.formattedTime}</td>
                               {queryType === "repay" && (
                                 <td className="text-white px-4 py-2">
                                   {tx.useATokens ? "Yes" : "No"}
                                 </td>
                               )}
                               {queryType === "borrow" && (
-                                <td className="text-white px-4 py-2">
-                                  {tx.borrowRate}
-                                </td>
+                                <td className="text-white px-4 py-2">{tx.borrowRate}</td>
                               )}
                             </tr>
                           ))}

@@ -47,14 +47,19 @@ export default function PoapPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [poaps, setPoaps] = React.useState<PoapItem[]>([]);
 
-  // Controls
-  const [useEmail, setUseEmail] = React.useState(false);
+  // Modes: wallet (default), email, manual
+  const [mode, setMode] = React.useState<"wallet" | "email" | "manual">("wallet");
   const [email, setEmail] = React.useState("");
+  const [manualWallet, setManualWallet] = React.useState("");
+
+  // Filters
   const [query, setQuery] = React.useState("");
   const [year, setYear] = React.useState<string>("all");
   const [sort, setSort] = React.useState<"new" | "old">("new");
 
-  const addressOrEmail = useEmail ? email.trim() : address;
+  const addressOrEmail =
+    mode === "email" ? email.trim() : mode === "manual" ? manualWallet.trim() : address;
+
 
   const fetchPoaps = React.useCallback(async () => {
     if (!addressOrEmail) return;
@@ -80,9 +85,12 @@ export default function PoapPage() {
     }
   }, [addressOrEmail]);
 
+    // 🔹 Auto-fetch for connected wallet (default mode)
   React.useEffect(() => {
-    if (isConnected && !useEmail) fetchPoaps();
-  }, [isConnected, useEmail, fetchPoaps]);
+    if (isConnected && mode === "wallet" && address) {
+      fetchPoaps();
+    }
+  }, [isConnected, mode, address, fetchPoaps]);
 
   const copyAddr = async () => {
     if (!addressOrEmail) return;
@@ -156,20 +164,32 @@ const years = React.useMemo(() => {
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                   {/* Account */}
                   <div className="space-y-3">
-                    <div className="text-sm uppercase tracking-wider text-slate-400">Account</div>
+                    <div className="text-sm uppercase tracking-wider text-slate-200">Account</div>
                     <div className="rounded-xl border border-slate-800 p-4 space-y-3 bg-slate-900/50">
                       <div className="text-xs text-slate-400">Using</div>
                       <div className="flex items-center gap-2">
                         <Input
-                          value={useEmail ? email : (address ?? "")}
-                          onChange={(e) => useEmail ? setEmail(e.target.value) : null}
-                          placeholder={useEmail ? "you@example.com" : "0x..."}
+                          value={
+                            mode === "email"
+                              ? email
+                              : mode === "manual"
+                              ? manualWallet
+                              : address ?? ""
+                          }
+                          onChange={(e) =>
+                            mode === "email"
+                              ? setEmail(e.target.value)
+                              : mode === "manual"
+                              ? setManualWallet(e.target.value)
+                              : null
+                          }
+                          placeholder={mode === "email" ? "you@example.com" : "0x..."}
                           className="bg-slate-800 border-slate-700 text-white font-mono"
-                          disabled={!useEmail}
+                          disabled={mode === "wallet"}
                         />
                         <Button
                           variant="outline"
-                          className="border-slate-700 text-slate-200"
+                          className="border-slate-700 text-slate-00"
                           onClick={copyAddr}
                           disabled={!addressOrEmail}
                           title="Copy"
@@ -186,7 +206,7 @@ const years = React.useMemo(() => {
 
                   {/* Filters */}
                   <div className="space-y-3">
-                    <div className="text-sm uppercase tracking-wider text-slate-400">Filters</div>
+                    <div className="text-sm uppercase tracking-wider text-slate-200">Filters</div>
                     <div className="rounded-xl border border-slate-800 p-4 bg-slate-900/50 space-y-3">
                       <div className="flex items-center gap-2">
                         <Search className="h-4 w-4 text-slate-400" />
@@ -231,25 +251,37 @@ const years = React.useMemo(() => {
 
                   {/* Mode */}
                   <div className="space-y-3">
-                    <div className="text-sm uppercase tracking-wider text-slate-400">Mode</div>
+                    <div className="text-sm uppercase tracking-wider text-slate-200">Mode</div>
                     <div className="rounded-xl border border-slate-800 p-4 bg-slate-900/50 space-y-3">
                       <div className="flex items-center justify-between gap-3">
-                        <div className="text-sm">
-                          {useEmail ? "Email mode" : "Wallet mode"}
+                        <div className="text-sm text-white font-medium">
+                          {mode === "wallet" && "Wallet mode"}
+                          {mode === "email" && "Email mode"}
+                          {mode === "manual" && "Manual wallet mode"}
                           <span className="block text-xs text-slate-400">
-                            {useEmail ? "Query by your POAP email" : "Auto-uses connected wallet"}
+                            {mode === "wallet" && "Auto-uses connected wallet"}
+                            {mode === "email" && "Query by your POAP email"}
+                            {mode === "manual" && "Enter any wallet address manually"}
                           </span>
                         </div>
                         <Button
                           variant="outline"
                           className="border-slate-700 text-slate-200"
-                          onClick={() => setUseEmail((s) => !s)}
+                          onClick={() =>
+                            setMode((prev) =>
+                              prev === "wallet"
+                                ? "email"
+                                : prev === "email"
+                                ? "manual"
+                                : "wallet"
+                            )
+                          }
                         >
                           Switch
                         </Button>
                       </div>
 
-                      {useEmail && (
+                      {mode === "email" && (
                         <div className="flex items-center gap-2">
                           <Input
                             className="bg-slate-800 border-slate-700 text-white"
@@ -266,6 +298,23 @@ const years = React.useMemo(() => {
                           </Button>
                         </div>
                       )}
+                      {mode === "manual" && (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            className="bg-slate-800 border-slate-700 text-white"
+                            placeholder="0x... wallet"
+                            value={manualWallet}
+                            onChange={(e) => setManualWallet(e.target.value)}
+                          />
+                          <Button
+                            className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600"
+                            onClick={fetchPoaps}
+                            disabled={!manualWallet || loading}
+                          >
+                            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -273,16 +322,18 @@ const years = React.useMemo(() => {
                 {/* Actions Row */}
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm text-slate-400">
-                    {isConnected || useEmail ? (
-                      <>Ready. {addressOrEmail ? "Click refresh to re-fetch." : "Enter an email to fetch."}</>
-                    ) : (
-                      <>Connect wallet to auto-load your POAPs or switch to Email mode.</>
-                    )}
+                    {mode === "wallet" && isConnected
+                      ? "Ready. Using connected wallet."
+                      : mode === "email"
+                      ? "Enter an email and click fetch."
+                      : mode === "manual"
+                      ? "Enter a wallet address and click search."
+                      : "Connect wallet to auto-load your POAPs."}
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
-                      className="border-slate-700 text-slate-200"
+                      className="border-slate-700 text-slate-700"
                       onClick={() => {
                         setQuery("");
                         setYear("all");
@@ -314,7 +365,7 @@ const years = React.useMemo(() => {
             </Card>
 
             {/* Title + meta */}
-            <div className="flex items-center justify-between">
+            {/* <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-white text-xl font-bold">My POAPs</h2>
                 <p className="text-slate-400 text-sm">
@@ -326,15 +377,22 @@ const years = React.useMemo(() => {
               {!isConnected && !useEmail && (
                 <div className="text-sm text-slate-400">Connect wallet to view.</div>
               )}
-            </div>
+            </div> */}
 
+
+            <div>
+              <h2 className="text-white text-xl font-bold">POAPs Gallery</h2>
+            </div>
             {/* Results */}
             <Card className="bg-slate-900 border-slate-800">
               <CardContent className="p-6">
                 {loading ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {Array.from({ length: 6 }).map((_, i) => (
-                      <div key={i} className="border border-slate-800 rounded-xl p-4 animate-pulse">
+                      <div
+                        key={i}
+                        className="border border-slate-800 rounded-xl p-4 animate-pulse"
+                      >
                         <div className="h-5 w-2/3 bg-slate-800 rounded mb-2" />
                         <div className="h-4 w-1/3 bg-slate-800 rounded mb-3" />
                         <div className="h-40 w-full bg-slate-800 rounded" />
@@ -355,32 +413,41 @@ const years = React.useMemo(() => {
                     {filtered.map((item, i) => {
                       const ev = item.event ?? {};
                       return (
-                        <div key={i} className="group border border-slate-800 rounded-xl overflow-hidden bg-slate-900 hover:bg-slate-900/80 transition">
+                        <div
+                          key={i}
+                          className="group border border-slate-500 rounded-xl overflow-hidden 
+                                      bg-gradient-to-r from-cyan-200 to-purple-200 
+                                      hover:from-cyan-400 hover:to-purple-400 
+                                      transition"
+                        >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           {ev.image_url ? (
                             <img
                               src={ev.image_url}
                               alt={ev.name || ""}
-                              className="h-40 w-full object-contain bg-slate-800/40"
+                              className="h-40 w-full object-contain bg-slate-900/70"
                               loading="lazy"
                             />
                           ) : (
-                            <div className="h-40 w-full bg-slate-800/40" />
+                            <div className="h-40 w-full bg-slate-900/70" />
                           )}
                           <div className="p-4 space-y-2">
-                            <div className="font-medium line-clamp-2">{ev.name || "Untitled Event"}</div>
-                            <div className="text-xs text-slate-200">
-                              {ev.start_date ? ev.start_date : "—"} {ev.end_date ? `→ ${ev.end_date}` : ""}
+                            <div className="font-bold text-black line-clamp-2">
+                              {ev.name || "Untitled Event"}
+                            </div>
+                            <div className="text-xs text-slate-800 font-black">
+                              {ev.start_date ? ev.start_date : "—"}{" "}
+                              {ev.end_date ? `→ ${ev.end_date}` : ""}
                             </div>
                             {(ev.city || ev.country) && (
-                              <div className="text-xs text-slate-200">
+                              <div className="text-xs text-slate-700">
                                 {[ev.city, ev.country].filter(Boolean).join(", ")}
                               </div>
                             )}
-                            <div className="text-[11px] text-slate-200 break-all">
+                            <div className="text-[11px] text-slate-600 break-all">
                               Owner: {item.owner ?? "—"}
                             </div>
-                            <div className="text-[11px] text-slate-200">
+                            <div className="text-[11px] text-slate-600">
                               Created: {item.created ?? "—"}
                             </div>
                           </div>
