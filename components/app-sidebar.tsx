@@ -30,7 +30,7 @@ const navigationItems = [
   { title: "On-chain Activity", icon: SquareChartGantt, url: "/onchain" },
   { title: "Your NFTs", icon: GalleryVerticalEnd, url: "/nfts" },
   { title: "Your POAPs", icon: Ticket, url: "/poaps" },
-  { title: "ENS Check", icon: Tag, url: "/" },
+  { title: "ENS Check", icon: Tag, url: "/ens" },
 ];
 
 function CustomSidebarTrigger() {

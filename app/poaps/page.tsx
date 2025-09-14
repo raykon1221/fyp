@@ -14,7 +14,14 @@ import {
   SelectItem,
   SelectValue,
 } from "@/components/ui/select";
-import { Copy, Loader2, RefreshCcw, Search, ShieldCheck, Filter } from "lucide-react";
+import {
+  Copy,
+  Loader2,
+  RefreshCcw,
+  Search,
+  ShieldCheck,
+  Filter,
+} from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 
 type PoapItem = {
@@ -48,7 +55,9 @@ export default function PoapPage() {
   const [poaps, setPoaps] = React.useState<PoapItem[]>([]);
 
   // Modes: wallet (default), email, manual
-  const [mode, setMode] = React.useState<"wallet" | "email" | "manual">("wallet");
+  const [mode, setMode] = React.useState<"wallet" | "email" | "manual">(
+    "wallet"
+  );
   const [email, setEmail] = React.useState("");
   const [manualWallet, setManualWallet] = React.useState("");
 
@@ -58,8 +67,11 @@ export default function PoapPage() {
   const [sort, setSort] = React.useState<"new" | "old">("new");
 
   const addressOrEmail =
-    mode === "email" ? email.trim() : mode === "manual" ? manualWallet.trim() : address;
-
+    mode === "email"
+      ? email.trim()
+      : mode === "manual"
+      ? manualWallet.trim()
+      : address;
 
   const fetchPoaps = React.useCallback(async () => {
     if (!addressOrEmail) return;
@@ -85,7 +97,7 @@ export default function PoapPage() {
     }
   }, [addressOrEmail]);
 
-    // 🔹 Auto-fetch for connected wallet (default mode)
+  // 🔹 Auto-fetch for connected wallet (default mode)
   React.useEffect(() => {
     if (isConnected && mode === "wallet" && address) {
       fetchPoaps();
@@ -98,27 +110,26 @@ export default function PoapPage() {
   };
 
   // derive distinct years
-const years = React.useMemo(() => {
-  const yearArr: number[] = [];
+  const years = React.useMemo(() => {
+    const yearArr: number[] = [];
 
-  poaps.forEach((p) => {
-    const y =
-      p.event?.year ??
-      (p.event?.start_date
-        ? parseInt(
-            (p.event.start_date.split("-").pop() || "").replace(/\D/g, ""),
-            10
-          )
-        : undefined);
+    poaps.forEach((p) => {
+      const y =
+        p.event?.year ??
+        (p.event?.start_date
+          ? parseInt(
+              (p.event.start_date.split("-").pop() || "").replace(/\D/g, ""),
+              10
+            )
+          : undefined);
 
-    if (y && !Number.isNaN(y) && !yearArr.includes(y)) {
-      yearArr.push(y);
-    }
-  });
+      if (y && !Number.isNaN(y) && !yearArr.includes(y)) {
+        yearArr.push(y);
+      }
+    });
 
     return yearArr.sort((a, b) => b - a);
   }, [poaps]);
-
 
   // filter + sort
   const filtered = React.useMemo(() => {
@@ -164,7 +175,9 @@ const years = React.useMemo(() => {
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                   {/* Account */}
                   <div className="space-y-3">
-                    <div className="text-sm uppercase tracking-wider text-slate-200">Account</div>
+                    <div className="text-sm uppercase tracking-wider text-slate-200">
+                      Account
+                    </div>
                     <div className="rounded-xl border border-slate-800 p-4 space-y-3 bg-slate-900/50">
                       <div className="text-xs text-slate-400">Using</div>
                       <div className="flex items-center gap-2">
@@ -183,7 +196,9 @@ const years = React.useMemo(() => {
                               ? setManualWallet(e.target.value)
                               : null
                           }
-                          placeholder={mode === "email" ? "you@example.com" : "0x..."}
+                          placeholder={
+                            mode === "email" ? "you@example.com" : "0x..."
+                          }
                           className="bg-slate-800 border-slate-700 text-white font-mono"
                           disabled={mode === "wallet"}
                         />
@@ -206,7 +221,9 @@ const years = React.useMemo(() => {
 
                   {/* Filters */}
                   <div className="space-y-3">
-                    <div className="text-sm uppercase tracking-wider text-slate-200">Filters</div>
+                    <div className="text-sm uppercase tracking-wider text-slate-200">
+                      Filters
+                    </div>
                     <div className="rounded-xl border border-slate-800 p-4 bg-slate-900/50 space-y-3">
                       <div className="flex items-center gap-2">
                         <Search className="h-4 w-4 text-slate-400" />
@@ -221,7 +238,10 @@ const years = React.useMemo(() => {
                       <div className="grid grid-cols-2 gap-3">
                         <div className="flex items-center gap-2">
                           <Filter className="h-4 w-4 text-slate-400" />
-                          <Select value={year} onValueChange={(v) => setYear(v)}>
+                          <Select
+                            value={year}
+                            onValueChange={(v) => setYear(v)}
+                          >
                             <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
                               <SelectValue placeholder="Year" />
                             </SelectTrigger>
@@ -236,7 +256,10 @@ const years = React.useMemo(() => {
                           </Select>
                         </div>
 
-                        <Select value={sort} onValueChange={(v) => setSort(v as "new" | "old")}>
+                        <Select
+                          value={sort}
+                          onValueChange={(v) => setSort(v as "new" | "old")}
+                        >
                           <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
                             <SelectValue placeholder="Sort" />
                           </SelectTrigger>
@@ -251,7 +274,9 @@ const years = React.useMemo(() => {
 
                   {/* Mode */}
                   <div className="space-y-3">
-                    <div className="text-sm uppercase tracking-wider text-slate-200">Mode</div>
+                    <div className="text-sm uppercase tracking-wider text-slate-200">
+                      Mode
+                    </div>
                     <div className="rounded-xl border border-slate-800 p-4 bg-slate-900/50 space-y-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-sm text-white font-medium">
@@ -261,12 +286,13 @@ const years = React.useMemo(() => {
                           <span className="block text-xs text-slate-400">
                             {mode === "wallet" && "Auto-uses connected wallet"}
                             {mode === "email" && "Query by your POAP email"}
-                            {mode === "manual" && "Enter any wallet address manually"}
+                            {mode === "manual" &&
+                              "Enter any wallet address manually"}
                           </span>
                         </div>
                         <Button
                           variant="outline"
-                          className="border-slate-700 text-slate-200"
+                          className="border-slate-700 text-slate-700"
                           onClick={() =>
                             setMode((prev) =>
                               prev === "wallet"
@@ -294,7 +320,11 @@ const years = React.useMemo(() => {
                             onClick={fetchPoaps}
                             disabled={!email || loading}
                           >
-                            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Fetch"}
+                            {loading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              "Fetch"
+                            )}
                           </Button>
                         </div>
                       )}
@@ -311,7 +341,11 @@ const years = React.useMemo(() => {
                             onClick={fetchPoaps}
                             disabled={!manualWallet || loading}
                           >
-                            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
+                            {loading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              "Search"
+                            )}
                           </Button>
                         </div>
                       )}
@@ -379,7 +413,6 @@ const years = React.useMemo(() => {
               )}
             </div> */}
 
-
             <div>
               <h2 className="text-white text-xl font-bold">POAPs Gallery</h2>
             </div>
@@ -406,7 +439,8 @@ const years = React.useMemo(() => {
                   </div>
                 ) : filtered.length === 0 ? (
                   <div className="rounded-xl border border-slate-800 p-8 text-center text-slate-200">
-                    No POAPs found. Try another address/email, or adjust filters.
+                    No POAPs found. Try another address/email, or adjust
+                    filters.
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -441,7 +475,9 @@ const years = React.useMemo(() => {
                             </div>
                             {(ev.city || ev.country) && (
                               <div className="text-xs text-slate-700">
-                                {[ev.city, ev.country].filter(Boolean).join(", ")}
+                                {[ev.city, ev.country]
+                                  .filter(Boolean)
+                                  .join(", ")}
                               </div>
                             )}
                             <div className="text-[11px] text-slate-600 break-all">
