@@ -5,6 +5,10 @@ import { getNftDiversity01 } from "@/server/factors/nft";
 // Lowercase address helper
 const lower = (s: string) => s.toLowerCase();
 
+function isAddressOrEns(val: string) {
+  return val.startsWith("0x") || val.endsWith(".eth");
+}
+
 /** 20% — Collateral diversity (0..1): number of distinct reserves used as collateral, capped at 5. */
 export async function getCollateralDiversity01(
   user: `0x${string}`
@@ -188,26 +192,28 @@ export async function getAccountAge01(user: `0x${string}`): Promise<number> {
   }
 }
 
+/** Social proof — ENS + POAPs + NFTs */
 export async function getSocialProof01(
-  user: `0x${string}`,
+  user: `0x${string}` | string,
   opts?: { ens?: string; nfts?: any[]; poaps?: any[] }
 ): Promise<number> {
   let score = 0;
 
-  // === ENS ===
+  if (!opts?.ens && isAddressOrEns(user)) {
   try {
-    let ens = opts?.ens;
-    if (!ens && process.env.ALCHEMY_RPC_MAINNET) {
-      const provider = new ethers.JsonRpcProvider(process.env.ALCHEMY_RPC_MAINNET);
-      const lookup = await provider.lookupAddress(user);
-      ens = lookup ?? undefined;
-    }
+    const res = await fetch("/api/ens-lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address: user }),
+    });
+    const { ens } = await res.json();
     if (ens) score += 0.3;
   } catch (e) {
-    console.warn("ENS fetch skipped:", e);
+    console.warn("ENS lookup skipped:", e);
   }
+}
 
-  // === POAPs ===
+  // POAPs (works with address or email)
   try {
     let poaps = opts?.poaps;
     if (!poaps && process.env.NEXT_PUBLIC_BASE_URL) {
@@ -222,26 +228,19 @@ export async function getSocialProof01(
         if (json.ok) poaps = json.data;
       }
     }
-    if (poaps?.length) {
-      score += Math.min((poaps.length / 10) * 0.4, 0.4); // cap at 0.4
-    }
+    if (poaps?.length) score += Math.min((poaps.length / 10) * 0.4, 0.4);
   } catch (e) {
     console.warn("POAP fetch skipped:", e);
   }
 
-  // === NFTs ===
-  try {
-    if (opts?.nfts?.length) {
-      const uniqContracts = new Set(
-        opts.nfts.map((n) => n?.contract?.address?.toLowerCase())
-      ).size;
-      score += Math.min((uniqContracts / 5) * 0.3, 0.3);
-    } else {
-      const nftDiversity = await getNftDiversity01(user);
+  // NFTs only if wallet/ENS
+  if (isAddressOrEns(user)) {
+    try {
+      const nftDiversity = await getNftDiversity01(user as `0x${string}`);
       score += nftDiversity * 0.3;
+    } catch (e) {
+      console.warn("NFT diversity skipped:", e);
     }
-  } catch (e) {
-    console.warn("NFT diversity fetch skipped:", e);
   }
 
   return Math.min(score, 1);

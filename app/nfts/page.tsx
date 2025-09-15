@@ -58,54 +58,50 @@ export default function NftsPage() {
   };
 
   const fetchNfts = React.useCallback(
-    async (pk?: string, overrideAddress?: string) => {
-      const addr = overrideAddress || activeAddress;
-      if (!addr) return;
+  async (pk?: string, overrideAddress?: string) => {
+    const addr = overrideAddress || activeAddress;
+    if (!addr || !addr.startsWith("0x")) {
+      console.warn("Skipping NFT fetch: no valid address");
+      return;
+    }
 
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch("/api/nfts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address: addr, pageKey: pk, network }),
-        });
-        const json = await res.json();
-        if (!res.ok || !json.ok)
-          throw new Error(json?.error ?? `HTTP ${res.status}`);
+    setLoading(true);
+    setError(null);
 
-        let merged: AlchemyResponse;
-        if (pk && data?.ownedNfts?.length) {
-          merged = {
-            ownedNfts: [...(data.ownedNfts || []), ...(json.data?.ownedNfts || [])],
-            pageKey: json.data?.pageKey,
-          };
-        } else {
-          merged = json.data;
-        }
-        setData(merged);
-        setPageKey(json.data?.pageKey);
+    try {
+      const res = await fetch("/api/nfts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: addr, pageKey: pk, network }),
+      });
 
-        // 🔹 compute NFT score
-        if (merged.ownedNfts && merged.ownedNfts.length > 0) {
-          const score = await getSocialProof01(addr as `0x${string}`, {
-            nfts: merged.ownedNfts,
-          });
-          setNftScore(score);
-        } else {
-          setNftScore(null);
-        }
-      } catch (e: any) {
-        setError(e.message);
-        setData(null);
-        setPageKey(undefined);
-        setNftScore(null);
-      } finally {
-        setLoading(false);
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
+
+      let merged: AlchemyResponse;
+      if (pk && data?.ownedNfts?.length) {
+        merged = {
+          ownedNfts: [...(data.ownedNfts || []), ...(json.data?.ownedNfts || [])],
+          pageKey: json.data?.pageKey,
+        };
+      } else {
+        merged = json.data;
       }
-    },
-    [activeAddress, network, data]
-  );
+
+      setData(merged);
+      setPageKey(json.data?.pageKey);
+    } catch (e: any) {
+      console.error(`NFT fetch failed for ${network}`, e);
+      setError(e.message);
+      setData(null);
+      setPageKey(undefined);
+    } finally {
+      setLoading(false);
+    }
+  },
+  [activeAddress, network, data]
+);
+
 
   // when wallet connects, set it as the default active address
   React.useEffect(() => {
