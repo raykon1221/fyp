@@ -195,53 +195,54 @@ export async function getSocialProof01(
   let score = 0;
 
   // === ENS ===
-  let ens: string | undefined = opts?.ens;
-  if (!ens) {
-    try {
-      const provider = new ethers.JsonRpcProvider(process.env.ALCHEMY_RPC_MAINNET!);
+  try {
+    let ens = opts?.ens;
+    if (!ens && process.env.ALCHEMY_RPC_MAINNET) {
+      const provider = new ethers.JsonRpcProvider(process.env.ALCHEMY_RPC_MAINNET);
       const lookup = await provider.lookupAddress(user);
-      ens = lookup ?? undefined; // 👈 normalize null → undefined
-    } catch (e) {
-      console.error("ENS fetch failed:", e);
+      ens = lookup ?? undefined;
     }
+    if (ens) score += 0.3;
+  } catch (e) {
+    console.warn("ENS fetch skipped:", e);
   }
-  if (ens) score += 0.3;
 
   // === POAPs ===
-  let poaps = opts?.poaps;
-  if (!poaps) {
-    try {
+  try {
+    let poaps = opts?.poaps;
+    if (!poaps && process.env.NEXT_PUBLIC_BASE_URL) {
       const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/poap`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ addressOrEmail: user }),
         cache: "no-store",
       });
-      const json = await res.json();
-      if (json.ok) poaps = json.data;
-    } catch (e) {
-      console.error("POAP fetch failed:", e);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.ok) poaps = json.data;
+      }
     }
-  }
-  if (poaps?.length) {
-    score += Math.min((poaps.length / 10) * 0.4, 0.4);
+    if (poaps?.length) {
+      score += Math.min((poaps.length / 10) * 0.4, 0.4); // cap at 0.4
+    }
+  } catch (e) {
+    console.warn("POAP fetch skipped:", e);
   }
 
   // === NFTs ===
-  if (opts?.nfts?.length) {
-    const uniqContracts = new Set(
-      opts.nfts.map((n) => n?.contract?.address?.toLowerCase())
-    ).size;
-    score += Math.min((uniqContracts / 5) * 0.3, 0.3);
-  } else {
-    try {
+  try {
+    if (opts?.nfts?.length) {
+      const uniqContracts = new Set(
+        opts.nfts.map((n) => n?.contract?.address?.toLowerCase())
+      ).size;
+      score += Math.min((uniqContracts / 5) * 0.3, 0.3);
+    } else {
       const nftDiversity = await getNftDiversity01(user);
       score += nftDiversity * 0.3;
-    } catch (e) {
-      console.error("NFT diversity fetch failed:", e);
     }
+  } catch (e) {
+    console.warn("NFT diversity fetch skipped:", e);
   }
 
   return Math.min(score, 1);
 }
-

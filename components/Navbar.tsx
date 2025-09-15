@@ -22,15 +22,15 @@ export function Navbar({ bannerText }: { bannerText?: string }) {
       </div>
 
       {/* Main navbar row */}
-      <div className="flex items-center justify-between p-6 border-b border-slate-800 bg-slate-950 text-white">
+      <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950 text-white">
         <div className="flex items-center gap-2">
           <Image
             src="/whiteop.png"
-            alt="openscore logo"
-            width={130}
-            height={130}
-            priority   
-            className="object-contain ml-8"
+            alt="logo"
+            height={300}
+            width={100}
+            style={{ width: "auto" }}
+            className="ml-2"
           />
         </div>
         <ConnectButton />

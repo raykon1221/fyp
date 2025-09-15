@@ -25,30 +25,13 @@ export type SupplyRow = {
 const SUBGRAPH_PROXY =
   process.env.NEXT_PUBLIC_SUBGRAPH_PROXY || "/api/subgraph";
 
-export async function fetchRepaysByAccount(
+  async function fetchUserHistory<T>(
   account: `0x${string}`,
+  query: string,
+  field: "repayHistory" | "borrowHistory" | "supplyHistory",
   first = 50,
   skip = 0
-): Promise<RepayRow[]> {
-  const query = `
-    query RepaysByUser($user: ID!, $first: Int, $skip: Int) {
-      user(id: $user) {
-        id
-        repayHistory(
-          orderBy: timestamp
-          orderDirection: desc
-          first: $first
-          skip: $skip
-        ) {
-          id
-          amount
-          timestamp
-          txHash
-          useATokens
-        }
-      }
-    }`;
-
+): Promise<T[]> {
   const res = await fetch(SUBGRAPH_PROXY, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -58,14 +41,11 @@ export async function fetchRepaysByAccount(
     }),
   });
 
-  // better error surfacing
   const text = await res.text();
   let json: any;
   try {
     json = JSON.parse(text);
-  } catch {
-    /* not JSON */
-  }
+  } catch {}
 
   if (!res.ok) {
     throw new Error(`Subgraph proxy HTTP ${res.status}: ${text}`);
@@ -73,7 +53,38 @@ export async function fetchRepaysByAccount(
   if (json?.errors) {
     throw new Error(`Subgraph errors: ${JSON.stringify(json.errors)}`);
   }
-  return json?.data?.user?.repayHistory ?? [];
+
+  // Always return plain array
+  return json?.data?.user?.[field] ?? [];
+}
+
+
+export async function fetchRepaysByAccount(
+  account: `0x${string}`,
+  first = 50,
+  skip = 0
+): Promise<RepayRow[]> {
+  const query = `
+    query RepaysByUser($user: ID!, $first: Int, $skip: Int) {
+      user(id: $user) {
+        repayHistory(orderBy: timestamp, orderDirection: desc, first: $first, skip: $skip) {
+          id
+          amount
+          timestamp
+          txHash
+          useATokens
+        }
+      }
+    }`;
+
+  const raw = await fetchUserHistory<any>(account, query, "repayHistory", first, skip);
+  return raw.map((r: any) => ({
+    id: r.id,
+    amount: r.amount,
+    timestamp: r.timestamp,
+    txHash: r.txHash,
+    useATokens: r.useATokens,
+  }));
 }
 
 export async function fetchBorrowsByAccount(
@@ -84,13 +95,7 @@ export async function fetchBorrowsByAccount(
   const query = `
     query BorrowsByUser($user: ID!, $first: Int, $skip: Int) {
       user(id: $user) {
-        id
-        borrowHistory(
-          orderBy: timestamp
-          orderDirection: desc
-          first: $first
-          skip: $skip
-        ) {
+        borrowHistory(orderBy: timestamp, orderDirection: desc, first: $first, skip: $skip) {
           id
           amount
           timestamp
@@ -100,28 +105,14 @@ export async function fetchBorrowsByAccount(
       }
     }`;
 
-  const res = await fetch(SUBGRAPH_PROXY, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      query,
-      variables: { user: account.toLowerCase(), first, skip },
-    }),
-  });
-
-  const text = await res.text();
-  let json: any;
-  try {
-    json = JSON.parse(text);
-  } catch {}
-
-  if (!res.ok) {
-    throw new Error(`Subgraph proxy HTTP ${res.status}: ${text}`);
-  }
-  if (json?.errors) {
-    throw new Error(`Subgraph errors: ${JSON.stringify(json.errors)}`);
-  }
-  return json?.data?.user?.borrowHistory ?? [];
+  const raw = await fetchUserHistory<any>(account, query, "borrowHistory", first, skip);
+  return raw.map((r: any) => ({
+    id: r.id,
+    amount: r.amount,
+    timestamp: r.timestamp,
+    txHash: r.txHash,
+    borrowRate: r.borrowRate,
+  }));
 }
 
 export async function fetchSuppliesByAccount(
@@ -132,13 +123,7 @@ export async function fetchSuppliesByAccount(
   const query = `
     query SuppliesByUser($user: ID!, $first: Int, $skip: Int) {
       user(id: $user) {
-        id
-        supplyHistory(
-          orderBy: timestamp
-          orderDirection: desc
-          first: $first
-          skip: $skip
-        ) {
+        supplyHistory(orderBy: timestamp, orderDirection: desc, first: $first, skip: $skip) {
           id
           amount
           timestamp
@@ -147,26 +132,11 @@ export async function fetchSuppliesByAccount(
       }
     }`;
 
-  const res = await fetch(SUBGRAPH_PROXY, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      query,
-      variables: { user: account.toLowerCase(), first, skip },
-    }),
-  });
-
-  const text = await res.text();
-  let json: any;
-  try {
-    json = JSON.parse(text);
-  } catch {}
-
-  if (!res.ok) {
-    throw new Error(`Subgraph proxy HTTP ${res.status}: ${text}`);
-  }
-  if (json?.errors) {
-    throw new Error(`Subgraph errors: ${JSON.stringify(json.errors)}`);
-  }
-  return json?.data?.user?.supplyHistory ?? [];
+  const raw = await fetchUserHistory<any>(account, query, "supplyHistory", first, skip);
+  return raw.map((r: any) => ({
+    id: r.id,
+    amount: r.amount,
+    timestamp: r.timestamp,
+    txHash: r.txHash,
+  }));
 }

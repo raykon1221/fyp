@@ -274,11 +274,13 @@ export default function NftsPage() {
                           nft?.image?.cachedUrl ||
                           nft?.media?.[0]?.gateway ||
                           nft?.image?.thumbnailUrl ||
-                          "";
+                          null;
+
                         const name =
                           nft?.name ||
                           nft?.contract?.name ||
                           `${nft?.contract?.address?.slice(0, 6)}…`;
+
                         return (
                           <div
                             key={`${nft?.contract?.address}-${nft?.tokenId}-${i}`}
@@ -287,32 +289,41 @@ export default function NftsPage() {
                                       hover:from-cyan-400 hover:to-purple-400 
                                       transition"
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={media}
-                              alt={name}
-                              className="h-40 w-full object-cover bg-slate-800/40"
-                              loading="lazy"
-                            />
-                            <div className="p-3 space-y-1.5">
-                              <div className="text-sm font-bold line-clamp-2">
-                                {name}
+                            {media ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={media}
+                                alt={name}
+                                className="h-40 w-full object-cover bg-slate-800/40"
+                                loading="lazy"
+                              />
+                            ) : (
+                              // fallback placeholder
+                              <div className="h-40 w-full bg-slate-800/40 flex items-center justify-center">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src="/placeholder-nft.png" // 👈 put a real placeholder image in /public
+                                  alt="No NFT image"
+                                  className="h-16 w-16 opacity-60"
+                                />
                               </div>
+                            )}
+
+                            <div className="p-3 space-y-1.5">
+                              <div className="text-sm font-bold line-clamp-2">{name}</div>
                               {nft?.description && (
                                 <div className="text-[11px] opacity-90 line-clamp-2">
                                   {nft.description}
                                 </div>
                               )}
                               <div className="text-[11px] opacity-60 mt-1">
-                                #{nft?.tokenId} •{" "}
-                                {nft?.contract?.address?.slice(0, 10)}…
+                                #{nft?.tokenId} • {nft?.contract?.address?.slice(0, 10)}…
                               </div>
                             </div>
                           </div>
                         );
                       })}
                     </div>
-
                     <div className="flex justify-center mt-6">
                       {pageKey && (
                         <Button
