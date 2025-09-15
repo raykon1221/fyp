@@ -20,6 +20,13 @@ import { ScoreCard } from "@/components/ScoreCard";
 import { Navbar } from "@/components/Navbar";
 import { MintCard } from "@/components/MintCard";
 
+// async function Dashboard({ ensName, nfts, poaps }: { ensName?: string; nfts?: any[]; poaps?: any[] }) {
+//   const socialScore = await getSocialProof01("0xUser", {
+//     ens: ensName,
+//     nfts,
+//     poaps,
+//   });
+
 // Function to read score from the server
 async function readScoreServer(user: `0x${string}`) {
   const r = await fetch("/api/score-read", {
@@ -33,9 +40,10 @@ async function readScoreServer(user: `0x${string}`) {
     user: `0x${string}`;
     score: number;
     factors: Record<string, string>; // 1e18-scaled strings
-    lastUpdated: number; // unix seconds
+    lastUpdated: number;
   };
 }
+
 
 // Function to refresh score
 async function refreshScore(user: `0x${string}`) {
@@ -130,33 +138,64 @@ export default function DashboardPage() {
     }
   }, [isConnected, address, router]);
 
-  const items = [
+  const [factorScores, setFactorScores] = useState({
+    repay: 0,
+    diversity: 0,
+    age: 0,
+    activity: 0,
+    risk: 0,
+    social: 0,
+  });
+
+
+  const items:{
+    label: string;
+    value: number;
+    max: number;
+    color: string;
+    onClick?: () => void;   // 👈 make optional
+      }[] = [
     {
-      label: "On-chain Activity",
-      value: 0,
+      label: "Repayment Score",
+      value: factorScores.repay,
       max: 100,
       color: "from-cyan-500 to-purple-500",
-      onClick: () => router.push("/onchain"),
     },
     {
-      label: "DeFi Usage",
-      value: 0,
-      max: 50,
+      label: "Diversity Score",
+      value: factorScores.diversity,
+      max: 100,
       color: "from-purple-500 to-pink-500",
     },
     {
-      label: "NFT Holdings",
-      value: 0,
-      max: 50,
+      label: "Account Age Score",
+      value: factorScores.age,
+      max: 100,
       color: "from-pink-500 to-cyan-500",
     },
     {
-      label: "Social Score",
-      value: 0,
-      max: 50,
+      label: "On-chain Activity Score",
+      value: factorScores.activity,
+      max: 100,
       color: "from-cyan-500 to-pink-500",
+      onClick: () => router.push("/onchain"),
+    },
+    {
+      label: "Risk Score",
+      value: factorScores.risk,
+      max: 100,
+      color: "from-green-500 to-blue-500",
+    },
+    {
+      label: "Social Score",
+      value: factorScores.social,
+      max: 100,
+      color: "from-yellow-500 to-red-500",
     },
   ];
+
+
+
   const { data: ensName, isLoading } = useEnsName({
     address,
     chainId: mainnet.id,
@@ -257,18 +296,32 @@ export default function DashboardPage() {
     fetchMinted();
   }, [address]);
 
+
   const handleScoreAction = async () => {
     if (!address) return;
     setErr(null);
-
     setBusy(true);
+
     try {
-      // Refresh the score
       const txHash = await refreshScore(address as `0x${string}`);
       const updatedScore = await readScoreServer(address as `0x${string}`);
+
+      console.log("✅ Raw factor values from server:", updatedScore.factors);
+
       setScore(updatedScore.score);
       setLastUpdated(updatedScore.lastUpdated);
       setTxHash(txHash);
+
+      const f = updatedScore.factors;
+
+      setFactorScores({
+        repay: Math.round(Number(f.repay01 ?? 0) / 1e16),       // 0–100
+        diversity: Math.round(Number(f.diversity01 ?? 0) / 1e16),
+        age: Math.round(Number(f.age01 ?? 0) / 1e16),
+        activity: Math.round(Number(f.activity01 ?? 0) / 1e16),
+        risk: Math.round(Number(f.risk01 ?? 0) / 1e16),
+        social: Math.round(Number(f.social01 ?? 0) / 1e16),
+      });
     } catch (e) {
       console.error(e);
       toast.error("Error updating score");
@@ -445,35 +498,46 @@ export default function DashboardPage() {
 
                   <div className="space-y-4">
                     <h2 className="text-2xl font-bold">Score Breakdown</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {items.map((item, index) => (
-                        <Card
-                          key={index}
-                          onClick={item.onClick}
-                          className={`bg-slate-900 border-slate-800 transition cursor-pointer hover:bg-slate-800 active:scale-[0.98]`}
-                        >
-                          <CardContent className="p-4">
-                            <div className="space-y-3">
-                              <div className="text-sm text-slate-400">
-                                {item.label}
-                              </div>
-                              <div className="text-2xl font-bold">
-                                {item.value}
-                              </div>
-                              <div className="text-xs text-slate-500">
-                                Max: {item.max}
-                              </div>
-                              <div className="w-full bg-slate-800 rounded-full h-2">
-                                <div
-                                  className={`h-2 rounded-full bg-gradient-to-r ${item.color}`}
-                                  style={{
-                                    width: `${(item.value / item.max) * 100}%`,
-                                  }}
-                                />
-                              </div>
+                      <Card
+                        key={index}
+                        onClick={item.onClick}
+                        className={`rounded-xl shadow-md border border-slate-800 cursor-pointer
+                                    bg-gradient-to-br from-slate-900 to-slate-950 
+                                    hover:scale-[1.02] hover:shadow-lg transition duration-300`}
+                      >
+                        <CardContent className="p-6">
+                          <div className="space-y-4">
+                            {/* Label */}
+                            <div
+                              className={`text-sm font-semibold tracking-wide uppercase 
+                                          bg-gradient-to-r ${item.color} bg-clip-text text-transparent`}
+                            >
+                              {item.label}
                             </div>
-                          </CardContent>
-                        </Card>
+
+                            {/* Value */}
+                            <div
+                              className={`text-3xl font-extrabold bg-gradient-to-r ${item.color} 
+                                          bg-clip-text text-transparent`}
+                            >
+                              {item.value}
+                            </div>
+
+                            {/* Max */}
+                            <div className="text-xs text-slate-400">Max: {item.max}</div>
+
+                            {/* Progress bar */}
+                            <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                              <div
+                                className={`h-2 bg-gradient-to-r ${item.color}`}
+                                style={{ width: `${(item.value / item.max) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
                       ))}
                     </div>
                   </div>

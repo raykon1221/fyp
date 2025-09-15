@@ -41,21 +41,20 @@ export default function Home() {
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
         {/* Animated Background Elements */}
         <div className="absolute inset-0 opacity-20" style={{ transform: `translateY(${scrollY * 0.5}px)` }}>
-          <div className="absolute top-20 left-10 w-32 h-32 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-full blur-xl animate-float"></div>
+          <div className="absolute top-20 left-10 w-32 h-32 bg-gradient-to-r from-cyan-700 to-purple-700 rounded-full blur-lg animate-float"></div>
           <div
-            className="absolute top-40 right-20 w-24 h-24 bg-gradient-to-r from-purple-500 to-cyan-500 rounded-full blur-lg animate-float"
+            className="absolute top-40 right-20 w-24 h-24 bg-gradient-to-r from-purple-700 to-cyan-700 rounded-full blur-md animate-float"
             style={{ animationDelay: "1s" }}
           ></div>
           <div
-            className="absolute bottom-40 left-1/4 w-40 h-40 bg-gradient-to-r from-cyan-400 to-purple-400 rounded-full blur-2xl animate-float"
+            className="absolute bottom-40 left-1/4 w-40 h-40 bg-gradient-to-r from-cyan-600 to-purple-600 rounded-full blur-2xl animate-float"
             style={{ animationDelay: "2s" }}
           ></div>
         </div>
 
         <div className="container mx-auto px-4 text-center relative z-10">
           <div className="animate-slide-in-up">
-            <div className="web3-badge mb-6">🚀 Next-Gen Credit Scoring</div>
-            <h1 className="text-6xl md:text-8xl font-bold mb-6 gradient-text text-balance">
+            <h1 className="text-6xl md:text-8xl font-bold mb-6 mt-20 gradient-text text-balance">
               Onchain Credit
               <br />
               Revolution
@@ -65,9 +64,12 @@ export default function Home() {
               accessible to everyone in the decentralized economy.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <button className="web3-button animate-glow">
+              <Button
+                size="lg"
+                className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-cyan-400 to-purple-400 hover:from-cyan-500 hover:via-purple-500 hover:to-pink-500 rounded-lg shadow-md"
+              >
                 Get Your Score <ArrowRight className="ml-2 h-5 w-5" />
-              </button>
+              </Button>
               <Button variant="outline" size="lg" className="px-8 py-4 text-lg bg-white/80 backdrop-blur-sm">
                 Learn More
               </Button>

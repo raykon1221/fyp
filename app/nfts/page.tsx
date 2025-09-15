@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, RefreshCcw, Search } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { getSocialProof01 } from "@/server/factors/aave";
 
 type AlchemyOwnedNft = {
   contract?: { address?: string; name?: string };
@@ -45,6 +46,9 @@ export default function NftsPage() {
   const [customAddress, setCustomAddress] = React.useState(""); // user-pasted address
   const [activeAddress, setActiveAddress] = React.useState<string | undefined>(undefined); // which address we are showing
 
+  // Social proof score
+  const [nftScore, setNftScore] = React.useState<number | null>(null);
+
   const NETWORK_LABELS: Record<string, string> = {
     ETH_MAINNET: "Ethereum",
     BASE_MAINNET: "Base",
@@ -70,21 +74,32 @@ export default function NftsPage() {
         if (!res.ok || !json.ok)
           throw new Error(json?.error ?? `HTTP ${res.status}`);
 
+        let merged: AlchemyResponse;
         if (pk && data?.ownedNfts?.length) {
-          const merged: AlchemyResponse = {
+          merged = {
             ownedNfts: [...(data.ownedNfts || []), ...(json.data?.ownedNfts || [])],
             pageKey: json.data?.pageKey,
           };
-          setData(merged);
-          setPageKey(json.data?.pageKey);
         } else {
-          setData(json.data);
-          setPageKey(json.data?.pageKey);
+          merged = json.data;
+        }
+        setData(merged);
+        setPageKey(json.data?.pageKey);
+
+        // 🔹 compute NFT score
+        if (merged.ownedNfts && merged.ownedNfts.length > 0) {
+          const score = await getSocialProof01(addr as `0x${string}`, {
+            nfts: merged.ownedNfts,
+          });
+          setNftScore(score);
+        } else {
+          setNftScore(null);
         }
       } catch (e: any) {
         setError(e.message);
         setData(null);
         setPageKey(undefined);
+        setNftScore(null);
       } finally {
         setLoading(false);
       }
@@ -154,6 +169,11 @@ export default function NftsPage() {
                       {query ? ` • “${query}”` : ""} •{" "}
                       {NETWORK_LABELS[network] || network}
                     </p>
+                    {nftScore !== null && (
+                      <p className="text-cyan-400 text-sm mt-1">
+                        Social Proof Score: {(nftScore * 100).toFixed(0)} / 100
+                      </p>
+                    )}
                   </div>
 
                   {/* Right: actions */}
@@ -292,7 +312,7 @@ export default function NftsPage() {
                         );
                       })}
                     </div>
-                    
+
                     <div className="flex justify-center mt-6">
                       {pageKey && (
                         <Button

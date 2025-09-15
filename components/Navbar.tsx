@@ -14,7 +14,7 @@ export function Navbar({ bannerText }: { bannerText?: string }) {
             <span className="font-medium"> {bannerText || (
               <>
                 <Link className="w-4 h-4 inline-block mr-2" />
-                Badges Minting Is Coming Soon!
+                Launching on Mainnet Soon !
               </>
             )}</span>
           </div>

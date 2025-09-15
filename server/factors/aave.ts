@@ -1,4 +1,6 @@
 import { postAaveSubgraph } from "@lib/subgraphClient";
+import { ethers } from "ethers";
+import { getNftDiversity01 } from "@/server/factors/nft";
 
 // Lowercase address helper
 const lower = (s: string) => s.toLowerCase();
@@ -186,7 +188,60 @@ export async function getAccountAge01(user: `0x${string}`): Promise<number> {
   }
 }
 
-/** 10% — Social proof: stub (return 0; you can wire ENS/Farcaster later) */
-export async function getSocialProof01(_: `0x${string}`): Promise<number> {
-  return 0;
+export async function getSocialProof01(
+  user: `0x${string}`,
+  opts?: { ens?: string; nfts?: any[]; poaps?: any[] }
+): Promise<number> {
+  let score = 0;
+
+  // === ENS ===
+  let ens: string | undefined = opts?.ens;
+  if (!ens) {
+    try {
+      const provider = new ethers.JsonRpcProvider(process.env.ALCHEMY_RPC_MAINNET!);
+      const lookup = await provider.lookupAddress(user);
+      ens = lookup ?? undefined; // 👈 normalize null → undefined
+    } catch (e) {
+      console.error("ENS fetch failed:", e);
+    }
+  }
+  if (ens) score += 0.3;
+
+  // === POAPs ===
+  let poaps = opts?.poaps;
+  if (!poaps) {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/poap`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addressOrEmail: user }),
+        cache: "no-store",
+      });
+      const json = await res.json();
+      if (json.ok) poaps = json.data;
+    } catch (e) {
+      console.error("POAP fetch failed:", e);
+    }
+  }
+  if (poaps?.length) {
+    score += Math.min((poaps.length / 10) * 0.4, 0.4);
+  }
+
+  // === NFTs ===
+  if (opts?.nfts?.length) {
+    const uniqContracts = new Set(
+      opts.nfts.map((n) => n?.contract?.address?.toLowerCase())
+    ).size;
+    score += Math.min((uniqContracts / 5) * 0.3, 0.3);
+  } else {
+    try {
+      const nftDiversity = await getNftDiversity01(user);
+      score += nftDiversity * 0.3;
+    } catch (e) {
+      console.error("NFT diversity fetch failed:", e);
+    }
+  }
+
+  return Math.min(score, 1);
 }
+

@@ -25,6 +25,8 @@ export function MintCard({ mintedNFT, score, cooldownLeft, handleMintScore, addr
     await handleMintScore();
   };
 
+  const canMint = score !== null && score > 0 && (!cooldownLeft || cooldownLeft <= 0);
+
   return (
     <>
       <Card className="bg-slate-900 border-slate-800">
@@ -32,7 +34,7 @@ export function MintCard({ mintedNFT, score, cooldownLeft, handleMintScore, addr
           <h3 className="text-2xl font-bold text-slate-200">Soulbound Token</h3>
 
           <div className="space-y-4">
-            
+            {/* If already minted, preview it */}
             {mintedNFT && (
               <div className="flex flex-col items-center space-y-1">
                 <Image
@@ -44,13 +46,10 @@ export function MintCard({ mintedNFT, score, cooldownLeft, handleMintScore, addr
                 />
                 <div className="mt-2 text-white text-md font-bold">Score: {score}</div>
 
-                {/* 🔗 View Metadata + Transaction */}
+                {/* 🔗 Metadata + Tx links */}
                 <div className="mt-2 text-center space-y-1">
                   <a
-                    href={mintedNFT.uri.replace(
-                      "ipfs://",
-                      "https://ipfs.io/ipfs/"
-                    )}
+                    href={mintedNFT.uri.replace("ipfs://", "https://ipfs.io/ipfs/")}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-sm text-cyan-400 hover:underline block"
@@ -76,67 +75,53 @@ export function MintCard({ mintedNFT, score, cooldownLeft, handleMintScore, addr
               </div>
             )}
 
+            {/* Minting conditions */}
             <div className="text-slate-400 text-md mt-2">
-              {cooldownLeft && cooldownLeft > 0 ? (
-                <span className="text-red-400">
-                  ⏳ Wait {formatTime(cooldownLeft)} before minting again
-                </span>
+              {!score ? (
+                <span className="text-yellow-400">⚠️ Please fetch your score before minting.</span>
+              ) : cooldownLeft && cooldownLeft > 0 ? (
+                <span className="text-red-400">⏳ Wait {formatTime(cooldownLeft)} before minting again</span>
               ) : (
-                <span className="text-green-400">You can mint now</span>
+                <span className="text-green-400">✅ You can mint now</span>
               )}
             </div>
 
-            {metadata && metadata.attributes && (
+            {/* Attributes if metadata available */}
+            {metadata?.attributes && (
               <div className="mt-2 space-y-1">
                 {metadata.attributes.map((attr: any, idx: number) => (
-                  <div
-                    key={idx}
-                    className="flex justify-between text-md text-slate-200"
-                  >
+                  <div key={idx} className="flex justify-between text-md text-slate-200">
                     <span>{attr.trait_type}</span>
-                    <span className="font-semibold text-slate-200">
-                      {attr.value}
-                    </span>
+                    <span className="font-semibold text-slate-200">{attr.value}</span>
                   </div>
                 ))}
               </div>
             )}
 
+            {/* Mint Button */}
             <Button
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600"
               onClick={() => setShowModal(true)}
-              disabled={cooldownLeft && cooldownLeft > 0}
+              disabled={!canMint}
             >
-              Mint Score
+              {!score ? "Get Score First" : "Mint Score"}
             </Button>
           </div>
         </CardContent>
       </Card>
 
       {/* Confirmation Modal */}
-      {showModal && (
+      {showModal && score && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50">
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-8 w-[600px] max-w-2xl text-center shadow-xl">
-            <h2 className="text-2xl font-bold text-slate-200 mb-6">
-              Confirm Minting
-            </h2>
-            <p className="text-slate-400 mb-4 text-lg">
-              You are about to mint your score NFT with the wallet:
-            </p>
-            <p className="font-mono text-md text-slate-300 mb-8 break-all">
-              {address ? `${address}` : ""}
-            </p>
+            <h2 className="text-2xl font-bold text-slate-200 mb-6">Confirm Minting</h2>
+            <p className="text-slate-400 mb-4 text-lg">You are about to mint your score NFT with the wallet:</p>
+            <p className="font-mono text-md text-slate-300 mb-8 break-all">{address}</p>
             <div className="flex justify-between gap-6">
-              <Button
-                className="flex-1 bg-slate-700 hover:bg-slate-600 py-3 text-lg"
-                onClick={() => setShowModal(false)}
-              >
+              <Button className="flex-1 bg-slate-700 hover:bg-slate-600 py-3 text-lg" onClick={() => setShowModal(false)}>
                 Cancel
               </Button>
-              <Button
-                className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 py-3 text-lg"
-                onClick={confirmMint}
-              >
+              <Button className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 py-3 text-lg" onClick={confirmMint}>
                 Confirm
               </Button>
             </div>

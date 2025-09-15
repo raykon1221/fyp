@@ -23,6 +23,7 @@ import {
   Filter,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { getSocialProof01 } from "@/server/factors/aave";
 
 type PoapItem = {
   event?: {
@@ -53,6 +54,7 @@ export default function PoapPage() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [poaps, setPoaps] = React.useState<PoapItem[]>([]);
+  const [poapScore, setPoapScore] = React.useState<number | null>(null);
 
   // Modes: wallet (default), email, manual
   const [mode, setMode] = React.useState<"wallet" | "email" | "manual">(
@@ -96,6 +98,21 @@ export default function PoapPage() {
       setLoading(false);
     }
   }, [addressOrEmail]);
+
+  // whenever poaps change, recompute score
+React.useEffect(() => {
+  async function calcScore() {
+    if (poaps.length > 0 && addressOrEmail) {
+      const score = await getSocialProof01(addressOrEmail as `0x${string}`, {
+        poaps,
+      });
+      setPoapScore(score);
+    } else {
+      setPoapScore(null);
+    }
+  }
+  calcScore();
+}, [poaps, addressOrEmail]);
 
   // 🔹 Auto-fetch for connected wallet (default mode)
   React.useEffect(() => {
@@ -415,6 +432,12 @@ export default function PoapPage() {
 
             <div>
               <h2 className="text-white text-xl font-bold">POAPs Gallery</h2>
+      
+            {poapScore !== null && (
+              <span className="text-cyan-400 text-sm">
+                Social Proof Score: {(poapScore * 100).toFixed(0)} / 100
+              </span>
+            )}
             </div>
             {/* Results */}
             <Card className="bg-slate-900 border-slate-800">
